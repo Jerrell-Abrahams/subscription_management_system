@@ -42,6 +42,19 @@ router.post('/users', async (req, res) => {
   res.status(201).json(profile);
 });
 
+router.delete('/users/:id', async (req, res) => {
+  if (req.params.id === req.adminUser.id) {
+    return res.status(400).json({ error: "Can't delete your own account" });
+  }
+
+  const { error } = await supabase.auth.admin.deleteUser(req.params.id);
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+
+  res.json({ success: true });
+});
+
 router.patch('/users/:id/password', async (req, res) => {
   const { password } = req.body;
   if (!password) {

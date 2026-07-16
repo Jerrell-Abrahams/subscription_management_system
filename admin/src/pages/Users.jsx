@@ -1,25 +1,29 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Plus, KeyRound } from 'lucide-react';
+import { Plus, KeyRound, Trash2 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
-import { createUser } from '../adminApi';
+import { createUser, deleteUser } from '../adminApi';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../components/ui/Table';
 import { Badge } from '../components/ui/Badge';
 import { Input } from '../components/ui/Input';
 import { ResetPasswordModal } from '../components/ResetPasswordModal';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import { useAuth } from '../context/AuthContext';
 
 const emptyForm = { email: '', password: '', fullName: '' };
 
 export function Users() {
+  const { session } = useAuth();
   const [users, setUsers] = useState([]);
   const [subscriptionCounts, setSubscriptionCounts] = useState({});
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [resetPasswordUser, setResetPasswordUser] = useState(null);
+  const [userToDelete, setUserToDelete] = useState(null);
 
   async function load() {
     const { data: userRows } = await supabase.from('app_users').select('*').order('created_at', { ascending: false });
@@ -54,6 +58,17 @@ export function Users() {
       toast.error(err.message);
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleDelete() {
+    try {
+      await deleteUser(userToDelete.id);
+      toast.success(`${userToDelete.email} deleted.`);
+      setUserToDelete(null);
+      load();
+    } catch (err) {
+      toast.error(err.message);
     }
   }
 
@@ -92,9 +107,18 @@ export function Users() {
               </Td>
               <Td>{new Date(u.created_at).toLocaleDateString()}</Td>
               <Td>
-                <Button variant="secondary" onClick={() => setResetPasswordUser(u)}>
-                  <KeyRound size={14} /> Reset password
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="secondary" onClick={() => setResetPasswordUser(u)}>
+                    <KeyRound size={14} /> Reset password
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    disabled={u.id === session?.user?.id}
+                    onClick={() => setUserToDelete(u)}
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                </div>
               </Td>
             </Tr>
           ))}
@@ -132,6 +156,16 @@ export function Users() {
         open={!!resetPasswordUser}
         onOpenChange={(open) => !open && setResetPasswordUser(null)}
         user={resetPasswordUser}
+      />
+
+      <ConfirmDialog
+        open={!!userToDelete}
+        onOpenChange={(open) => !open && setUserToDelete(null)}
+        title={`Delete ${userToDelete?.email}?`}
+        description="This permanently deletes the account and cascades to their subscriptions, activations, and payment history. This can't be undone."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={handleDelete}
       />
     </div>
   );

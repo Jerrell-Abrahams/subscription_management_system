@@ -27,6 +27,10 @@ export function resetPassword(userId, password) {
   return authedFetch(`/api/admin/users/${userId}/password`, { method: 'PATCH', body: JSON.stringify({ password }) });
 }
 
+export function deleteUser(userId) {
+  return authedFetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
+}
+
 export function createSubscription(payload) {
   return authedFetch('/api/admin/subscriptions', { method: 'POST', body: JSON.stringify(payload) });
 }
