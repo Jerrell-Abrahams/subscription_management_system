@@ -30,7 +30,25 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/updates', updatesRoutes);
 app.use('/api/admin', adminRoutes);
 
-dailySubscriptionCheck.start();
+// Vercel invokes this as a serverless function per request, so an in-process
+// node-cron scheduler never fires reliably. Vercel Cron hits this route
+// instead (see vercel.json), guarded by CRON_SECRET which Vercel sends
+// automatically as a bearer token.
+app.get('/api/cron/expire-subscriptions', async (req, res) => {
+  if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
+    return res.status(401).end();
+  }
+  await dailySubscriptionCheck.expireStaleSubscriptions();
+  res.json({ ok: true });
+});
 
 const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`license-platform listening on port ${port}`));
+
+// Only bind a port / start the local cron scheduler when run directly
+// (`node src/server.js`), not when Vercel requires() this as a module.
+if (require.main === module) {
+  dailySubscriptionCheck.start();
+  app.listen(port, () => console.log(`license-platform listening on port ${port}`));
+}
+
+module.exports = app;
