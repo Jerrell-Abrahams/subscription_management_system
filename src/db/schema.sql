@@ -65,6 +65,9 @@ create table analytics_events (
   user_id uuid references app_users(id) on delete cascade,
   product_id uuid references products(id) on delete cascade,
   event_type text not null,
+  -- promoted out of payload for easy aggregation/sorting; null for events
+  -- that don't report a scan count
+  scan_count integer,
   payload jsonb,
   created_at timestamptz not null default now()
 );

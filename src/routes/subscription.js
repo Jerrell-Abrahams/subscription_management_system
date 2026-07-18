@@ -2,6 +2,7 @@ const express = require('express');
 const supabase = require('../config/supabase');
 const auth = require('../middleware/auth');
 const { signCertificate } = require('../lib/licenseCert');
+const { superUserClaim, publicSubscription } = require('../lib/superUserCode');
 
 const router = express.Router();
 router.use(auth);
@@ -47,7 +48,7 @@ router.post('/activate', async (req, res) => {
 
   if (existingActivation) {
     return res.json({
-      subscription,
+      subscription: publicSubscription(subscription),
       activation: existingActivation,
       certificate: signCertificate({
         userId: req.user.userId,
@@ -56,6 +57,7 @@ router.post('/activate', async (req, res) => {
         status: subscription.status,
         periodEnd: subscription.current_period_end,
         issuedAt: Date.now(),
+        superUser: superUserClaim(subscription),
       }),
     });
   }
@@ -102,7 +104,7 @@ router.post('/activate', async (req, res) => {
   }
 
   res.status(201).json({
-    subscription: updatedSubscription,
+    subscription: publicSubscription(updatedSubscription),
     activation,
     certificate: signCertificate({
       userId: req.user.userId,
@@ -111,6 +113,7 @@ router.post('/activate', async (req, res) => {
       status: updatedSubscription.status,
       periodEnd: updatedSubscription.current_period_end,
       issuedAt: Date.now(),
+      superUser: superUserClaim(updatedSubscription),
     }),
   });
 });
@@ -132,7 +135,7 @@ router.get('/status', async (req, res) => {
   }
 
   res.json({
-    subscription,
+    subscription: publicSubscription(subscription),
     activationCount: subscription.current_activations,
     certificate: signCertificate({
       userId: req.user.userId,
@@ -140,6 +143,7 @@ router.get('/status', async (req, res) => {
       status: subscription.status,
       periodEnd: subscription.current_period_end,
       issuedAt: Date.now(),
+      superUser: superUserClaim(subscription),
     }),
   });
 });

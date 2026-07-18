@@ -46,6 +46,7 @@ export function SubscriptionDetail() {
       max_activations: subRow?.max_activations ?? 1,
       billing_interval: subRow?.billing_interval ?? 'monthly',
       current_period_end: toDateInputValue(subRow?.current_period_end),
+      super_user_code: subRow?.super_user_code ?? '',
     });
   }
 
@@ -56,6 +57,13 @@ export function SubscriptionDetail() {
 
   async function handleSave(e) {
     e.preventDefault();
+    // Typed on the POS's 4-6 digit keypad; reject anything it can't enter so an admin
+    // can't set a code that silently never works on the till (superUserCode.js hashes it as-is).
+    const code = form.super_user_code.trim();
+    if (code && !/^\d{4,6}$/.test(code)) {
+      toast.error('Super user code must be 4–6 digits (or blank to disable).');
+      return;
+    }
     const { error } = await supabase
       .from('subscriptions')
       .update({
@@ -63,6 +71,7 @@ export function SubscriptionDetail() {
         max_activations: Number(form.max_activations) || 1,
         billing_interval: form.billing_interval,
         current_period_end: form.current_period_end ? new Date(form.current_period_end).toISOString() : null,
+        super_user_code: code || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id);
@@ -129,7 +138,8 @@ export function SubscriptionDetail() {
     form.status !== subscription.status ||
     Number(form.max_activations) !== subscription.max_activations ||
     form.billing_interval !== subscription.billing_interval ||
-    form.current_period_end !== toDateInputValue(subscription.current_period_end);
+    form.current_period_end !== toDateInputValue(subscription.current_period_end) ||
+    form.super_user_code.trim() !== (subscription.super_user_code ?? '');
 
   return (
     <div className="space-y-6">
@@ -201,6 +211,21 @@ export function SubscriptionDetail() {
               />
             </label>
           </div>
+          <label className="mt-4 flex flex-col gap-1.5 text-xs font-medium text-text/70">
+            Super user support code
+            <Input
+              inputMode="numeric"
+              placeholder="4–6 digits, blank to disable"
+              value={form.super_user_code}
+              onChange={(e) => setForm({ ...form, super_user_code: e.target.value })}
+              className="sm:max-w-xs"
+            />
+            <span className="font-normal text-text/50">
+              Signs support into this customer's POS with manager rights. Use a unique code per
+              subscription. The till applies a change after its next online status check (≤6h) — it
+              won't reach a currently-offline till until it reconnects.
+            </span>
+          </label>
           <div className="mt-5 flex items-center justify-end border-t border-border pt-4">
             <Button type="submit" disabled={!isDirty}>
               <Save size={15} /> Save changes
