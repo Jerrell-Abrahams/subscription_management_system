@@ -46,3 +46,11 @@ export function revokeSubscription(id) {
 export function renewSubscription(id) {
   return authedFetch(`/api/admin/subscriptions/${id}/renew`, { method: 'PATCH' });
 }
+
+export function suspendSubscription(id) {
+  return authedFetch(`/api/admin/subscriptions/${id}/suspend`, { method: 'PATCH' });
+}
+
+export function createWebsite(payload) {
+  return authedFetch('/api/admin/websites', { method: 'POST', body: JSON.stringify(payload) });
+}

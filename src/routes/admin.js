@@ -2,6 +2,7 @@ const express = require('express');
 const supabase = require('../config/supabase');
 const adminAuth = require('../middleware/adminAuth');
 const { nextPeriodEnd } = require('../lib/renewal');
+const { normalizeDomain } = require('../lib/websiteAccess');
 const { sendOnboardingEmail } = require('../lib/email');
 
 const router = express.Router();
@@ -125,6 +126,75 @@ function setStatusHandler(status) {
 }
 router.patch('/subscriptions/:id/cancel', setStatusHandler('canceled'));
 router.patch('/subscriptions/:id/revoke', setStatusHandler('revoked'));
+// Suspend a website (or any subscription) for non-payment. past_due, not revoked, so
+// the existing renew route can reactivate it -- renew refuses only 'revoked'.
+router.patch('/subscriptions/:id/suspend', setStatusHandler('past_due'));
+
+// A website = a subscription of the 'website' product + a websites row pinning its
+// domain. Created active (a site is live immediately; no device-activation step).
+router.post('/websites', async (req, res) => {
+  const { userId, domain, billingInterval, currentPeriodEnd } = req.body;
+  if (!userId || !domain) {
+    return res.status(400).json({ error: 'userId and domain are required' });
+  }
+
+  const host = normalizeDomain(domain);
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(host)) {
+    return res.status(400).json({ error: 'domain is not a valid hostname' });
+  }
+
+  const { data: product, error: productError } = await supabase
+    .from('products')
+    .select('id')
+    .eq('slug', 'website')
+    .single();
+  if (productError || !product) {
+    return res.status(500).json({ error: 'website product missing -- run src/db/websites.sql' });
+  }
+
+  const interval = billingInterval === 'yearly' ? 'yearly' : 'monthly';
+  let periodEnd;
+  if (currentPeriodEnd) {
+    periodEnd = new Date(currentPeriodEnd);
+  } else {
+    periodEnd = new Date();
+    periodEnd.setMonth(periodEnd.getMonth() + (interval === 'yearly' ? 12 : 1));
+  }
+  if (Number.isNaN(periodEnd.getTime())) {
+    return res.status(400).json({ error: 'currentPeriodEnd is invalid' });
+  }
+
+  const { data: subscription, error: subError } = await supabase
+    .from('subscriptions')
+    .insert({
+      user_id: userId,
+      product_id: product.id,
+      billing_interval: interval,
+      status: 'active',
+      current_period_end: periodEnd.toISOString(),
+    })
+    .select('id')
+    .single();
+  if (subError) {
+    return res.status(400).json({ error: subError.message });
+  }
+
+  const { data: website, error: siteError } = await supabase
+    .from('websites')
+    .insert({ subscription_id: subscription.id, domain: host })
+    .select('id, domain, created_at, subscriptions(id, status, current_period_end, billing_interval, app_users(email))')
+    .single();
+  if (siteError) {
+    // Roll back the subscription we just made so a rejected domain leaves no orphan row.
+    await supabase.from('subscriptions').delete().eq('id', subscription.id);
+    if (siteError.code === '23505') {
+      return res.status(409).json({ error: 'Domain already registered' });
+    }
+    return res.status(400).json({ error: siteError.message });
+  }
+
+  res.status(201).json(website);
+});
 
 // Replaces the removed self-service POST /api/subscription/renew -- renewal
 // is admin-only until a payment provider exists to trigger it on real money.

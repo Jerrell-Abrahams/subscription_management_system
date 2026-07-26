@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, CreditCard, Users, Package, UploadCloud, BarChart3, ChevronDown, LogOut } from 'lucide-react';
+import { LayoutDashboard, CreditCard, Globe, Users, Package, UploadCloud, BarChart3, ChevronDown, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from './ui/DropdownMenu';
 import { cn } from './ui/cn';
@@ -7,6 +7,7 @@ import { cn } from './ui/cn';
 const links = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/subscriptions', label: 'Subscriptions', icon: CreditCard },
+  { to: '/websites', label: 'Websites', icon: Globe },
   { to: '/users', label: 'Users', icon: Users },
   { to: '/products', label: 'Products', icon: Package },
   { to: '/updates', label: 'Updates', icon: UploadCloud },

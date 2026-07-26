@@ -5,6 +5,7 @@ const rateLimit = require('express-rate-limit');
 
 const authRoutes = require('./routes/auth');
 const subscriptionRoutes = require('./routes/subscription');
+const siteRoutes = require('./routes/site');
 const analyticsRoutes = require('./routes/analytics');
 const updatesRoutes = require('./routes/updates');
 const adminRoutes = require('./routes/admin');
@@ -26,6 +27,10 @@ app.use('/api/subscription', rateLimit({ windowMs: fifteenMinutes, limit: 60 }))
 
 app.use('/api/auth', authRoutes);
 app.use('/api/subscription', subscriptionRoutes);
+// Public site-status: called cross-origin from every customer domain's edge
+// middleware, so it needs its own permissive CORS (the global one is locked to
+// ADMIN_ORIGIN) and a per-IP cap against status flooding.
+app.use('/api/site', cors({ origin: '*' }), rateLimit({ windowMs: 60 * 1000, limit: 120 }), siteRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/updates', updatesRoutes);
 app.use('/api/admin', adminRoutes);
