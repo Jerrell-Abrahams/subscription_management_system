@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Users, CreditCard, Activity, PlugZap } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { chartTooltip } from '../lib/chart';
 import { supabase } from '../supabaseClient';
 import { Card } from '../components/ui/Card';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../components/ui/Table';
+import { Skeleton, SkeletonRows } from '../components/ui/Skeleton';
 import { STATUS_CHART_COLORS } from '../components/ui/Badge';
 
 const STATUS_ORDER = ['pending', 'active', 'past_due', 'canceled', 'expired', 'revoked'];
@@ -16,17 +18,24 @@ function KpiCard({ icon: Icon, label, value }) {
       </div>
       <div>
         <p className="text-xs text-text/70">{label}</p>
-        <p className="text-xl font-semibold text-text-h">{value}</p>
+        {value === null ? (
+          <Skeleton className="mt-1.5 h-5 w-10" />
+        ) : (
+          <p className="text-xl font-semibold text-text-h">{value}</p>
+        )}
       </div>
     </Card>
   );
 }
 
 export function Dashboard() {
-  const [counts, setCounts] = useState({ users: 0, active: 0, total: 0, recentActivations: 0 });
-  const [statusBreakdown, setStatusBreakdown] = useState([]);
-  const [recentActivations, setRecentActivations] = useState([]);
-  const [recentEvents, setRecentEvents] = useState([]);
+  // Four sentinels rather than one `loading` flag: load() runs in two sequential waves
+  // (counts+breakdown, then the two tables), and a single flag would hold the KPI row
+  // hostage to the activations query it doesn't depend on.
+  const [counts, setCounts] = useState(null);
+  const [statusBreakdown, setStatusBreakdown] = useState(null);
+  const [recentActivations, setRecentActivations] = useState(null);
+  const [recentEvents, setRecentEvents] = useState(null);
 
   useEffect(() => {
     async function load() {
@@ -69,28 +78,32 @@ export function Dashboard() {
       <h2 className="text-xl font-semibold text-text-h">Dashboard</h2>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard icon={Users} label="Total users" value={counts.users} />
-        <KpiCard icon={CreditCard} label="Active subscriptions" value={counts.active} />
-        <KpiCard icon={Activity} label="Total subscriptions" value={counts.total} />
-        <KpiCard icon={PlugZap} label="Activations (7d)" value={counts.recentActivations} />
+        <KpiCard icon={Users} label="Total users" value={counts?.users ?? null} />
+        <KpiCard icon={CreditCard} label="Active subscriptions" value={counts?.active ?? null} />
+        <KpiCard icon={Activity} label="Total subscriptions" value={counts?.total ?? null} />
+        <KpiCard icon={PlugZap} label="Activations (7d)" value={counts?.recentActivations ?? null} />
       </div>
 
       <Card>
         <h3 className="mb-3 text-sm font-semibold text-text-h">Subscriptions by status</h3>
         <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={statusBreakdown}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-              <XAxis dataKey="status" stroke="var(--color-text)" fontSize={12} />
-              <YAxis allowDecimals={false} stroke="var(--color-text)" fontSize={12} />
-              <Tooltip contentStyle={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 8 }} />
-              <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                {statusBreakdown.map((entry) => (
-                  <Cell key={entry.status} fill={STATUS_CHART_COLORS[entry.status]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          {statusBreakdown === null ? (
+            <Skeleton className="h-full w-full" />
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={statusBreakdown}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis dataKey="status" stroke="var(--color-text)" fontSize={12} />
+                <YAxis allowDecimals={false} stroke="var(--color-text)" fontSize={12} />
+                <Tooltip {...chartTooltip} />
+                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                  {statusBreakdown.map((entry) => (
+                    <Cell key={entry.status} fill={STATUS_CHART_COLORS[entry.status]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </Card>
 
@@ -102,14 +115,16 @@ export function Dashboard() {
               <Tr><Th>User</Th><Th>Product</Th><Th>Device</Th><Th>When</Th></Tr>
             </Thead>
             <Tbody>
-              {recentActivations.map((a) => (
-                <Tr key={a.id}>
-                  <Td>{a.subscriptions?.app_users?.email}</Td>
-                  <Td>{a.subscriptions?.products?.name}</Td>
-                  <Td>{a.device_name || '—'}</Td>
-                  <Td>{new Date(a.activated_at).toLocaleString()}</Td>
-                </Tr>
-              ))}
+              {recentActivations === null
+                ? <SkeletonRows cols={4} />
+                : recentActivations.map((a) => (
+                    <Tr key={a.id}>
+                      <Td>{a.subscriptions?.app_users?.email}</Td>
+                      <Td>{a.subscriptions?.products?.name}</Td>
+                      <Td>{a.device_name || '—'}</Td>
+                      <Td>{new Date(a.activated_at).toLocaleString()}</Td>
+                    </Tr>
+                  ))}
             </Tbody>
           </Table>
         </Card>
@@ -120,14 +135,16 @@ export function Dashboard() {
               <Tr><Th>Event</Th><Th>User</Th><Th>Product</Th><Th>When</Th></Tr>
             </Thead>
             <Tbody>
-              {recentEvents.map((e) => (
-                <Tr key={e.id}>
-                  <Td>{e.event_type}</Td>
-                  <Td>{e.app_users?.email}</Td>
-                  <Td>{e.products?.name}</Td>
-                  <Td>{new Date(e.created_at).toLocaleString()}</Td>
-                </Tr>
-              ))}
+              {recentEvents === null
+                ? <SkeletonRows cols={4} />
+                : recentEvents.map((e) => (
+                    <Tr key={e.id}>
+                      <Td>{e.event_type}</Td>
+                      <Td>{e.app_users?.email}</Td>
+                      <Td>{e.products?.name}</Td>
+                      <Td>{new Date(e.created_at).toLocaleString()}</Td>
+                    </Tr>
+                  ))}
             </Tbody>
           </Table>
         </Card>

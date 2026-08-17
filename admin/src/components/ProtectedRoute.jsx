@@ -1,11 +1,15 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from './ui/Button';
+import { Layout } from './Layout';
 
 export function ProtectedRoute({ children }) {
   const { session, isAdmin, loading, logout } = useAuth();
 
-  if (loading) return <p className="p-10 text-center text-sm text-text/70">Loading…</p>;
+  // The app boot gate. `children` is <Layout /> too, so React reconciles this in place
+  // rather than remounting -- the sidebar and header you see here are the ones that stay,
+  // and only the content area swaps once the session and admin flag land.
+  if (loading) return <Layout loading />;
   if (!session) return <Navigate to="/login" replace />;
   if (!isAdmin) {
     return (

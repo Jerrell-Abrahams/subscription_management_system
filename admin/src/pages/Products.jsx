@@ -4,10 +4,11 @@ import { supabase } from '../supabaseClient';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../components/ui/Table';
+import { Skeleton, SkeletonRows } from '../components/ui/Skeleton';
 import { Input } from '../components/ui/Input';
 
 export function Products() {
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState(null); // null = not loaded, [] = loaded empty
   const [form, setForm] = useState({ slug: '', name: '' });
 
   async function load() {
@@ -34,7 +35,12 @@ export function Products() {
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-semibold text-text-h">
-        Products <span className="text-sm font-normal text-text/70">({products.length})</span>
+        Products{' '}
+        {products === null ? (
+          <Skeleton className="inline-block h-3 w-8 align-middle" />
+        ) : (
+          <span className="text-sm font-normal text-text/70">({products.length})</span>
+        )}
       </h2>
 
       <Card>
@@ -62,7 +68,8 @@ export function Products() {
           <Tr><Th>Name</Th><Th>Slug</Th><Th>Created</Th></Tr>
         </Thead>
         <Tbody>
-          {products.map((p) => (
+          {products === null && <SkeletonRows cols={3} rows={3} />}
+          {products?.map((p) => (
             <Tr key={p.id}>
               <Td>{p.name}</Td>
               <Td className="font-mono text-xs">{p.slug}</Td>

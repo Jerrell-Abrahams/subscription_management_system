@@ -3,6 +3,7 @@ const supabase = require('../config/supabase');
 const auth = require('../middleware/auth');
 const { signCertificate } = require('../lib/licenseCert');
 const { superUserClaim, publicSubscription } = require('../lib/superUserCode');
+const { modulesClaim } = require('../lib/modules');
 
 const router = express.Router();
 router.use(auth);
@@ -58,6 +59,7 @@ router.post('/activate', async (req, res) => {
         periodEnd: subscription.current_period_end,
         issuedAt: Date.now(),
         superUser: superUserClaim(subscription),
+        modules: modulesClaim(subscription),
       }),
     });
   }
@@ -114,6 +116,7 @@ router.post('/activate', async (req, res) => {
       periodEnd: updatedSubscription.current_period_end,
       issuedAt: Date.now(),
       superUser: superUserClaim(updatedSubscription),
+      modules: modulesClaim(updatedSubscription),
     }),
   });
 });
@@ -144,6 +147,7 @@ router.get('/status', async (req, res) => {
       periodEnd: subscription.current_period_end,
       issuedAt: Date.now(),
       superUser: superUserClaim(subscription),
+      modules: modulesClaim(subscription),
     }),
   });
 });

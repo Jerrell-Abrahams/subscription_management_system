@@ -5,11 +5,12 @@ import { supabase } from '../supabaseClient';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../components/ui/Table';
+import { Skeleton, SkeletonRows } from '../components/ui/Skeleton';
 import { Input } from '../components/ui/Input';
 import { Select, SelectItem } from '../components/ui/Select';
 
 export function Updates() {
-  const [updates, setUpdates] = useState([]);
+  const [updates, setUpdates] = useState(null); // null = not loaded, [] = loaded empty
   const [products, setProducts] = useState([]);
   const [form, setForm] = useState({ productId: '', version: '', downloadUrl: '', releaseNotes: '' });
 
@@ -50,7 +51,12 @@ export function Updates() {
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-semibold text-text-h">
-        Updates <span className="text-sm font-normal text-text/70">({updates.length})</span>
+        Updates{' '}
+        {updates === null ? (
+          <Skeleton className="inline-block h-3 w-8 align-middle" />
+        ) : (
+          <span className="text-sm font-normal text-text/70">({updates.length})</span>
+        )}
       </h2>
 
       <Card>
@@ -89,7 +95,8 @@ export function Updates() {
           <Tr><Th>Product</Th><Th>Version</Th><Th>Notes</Th><Th>Published</Th></Tr>
         </Thead>
         <Tbody>
-          {updates.map((u) => (
+          {updates === null && <SkeletonRows cols={4} rows={4} />}
+          {updates?.map((u) => (
             <Tr key={u.id}>
               <Td>{u.products?.name}</Td>
               <Td>

@@ -15,7 +15,7 @@ router.get('/status', async (req, res) => {
 
   const { data: website, error } = await supabase
     .from('websites')
-    .select('subscriptions(status, current_period_end)')
+    .select('kind, subscriptions(status, current_period_end)')
     .ilike('domain', domain) // no % / _ in a hostname, so this is a case-insensitive exact match
     .maybeSingle();
 
@@ -29,6 +29,15 @@ router.get('/status', async (req, res) => {
   // blocked after you register it here and suspend it.
   if (!website) {
     return res.json({ active: true, reason: 'unregistered' });
+  }
+
+  // Only a client site is gated on billing. Demos and our own properties carry no
+  // subscription, and isActive(null) is false -- without this they would go from
+  // "unregistered, fail open" to "registered, permanently suspended" the moment they were
+  // listed in the Websites tab.
+  if (website.kind !== 'client') {
+    res.set('Cache-Control', 'public, max-age=60');
+    return res.json({ active: true, reason: website.kind });
   }
 
   const active = isActive(website.subscriptions);

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { chartTooltip } from '../lib/chart';
 import { supabase } from '../supabaseClient';
 import { Card } from '../components/ui/Card';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../components/ui/Table';
+import { Skeleton, SkeletonRows } from '../components/ui/Skeleton';
 import { STATUS_CHART_COLORS } from '../components/ui/Badge';
 import { Select, SelectItem } from '../components/ui/Select';
 
@@ -16,9 +18,10 @@ const RANGES = {
 const STATUS_ORDER = ['pending', 'active', 'past_due', 'canceled', 'expired', 'revoked'];
 
 export function Analytics() {
-  const [events, setEvents] = useState([]);
-  const [statusBreakdown, setStatusBreakdown] = useState([]);
+  const [events, setEvents] = useState(null); // null = not loaded, [] = loaded empty
+  const [statusBreakdown, setStatusBreakdown] = useState(null);
   const [range, setRange] = useState('7d');
+  const loading = events === null;
 
   useEffect(() => {
     (async () => {
@@ -39,10 +42,11 @@ export function Analytics() {
   }, []);
 
   const filteredEvents = useMemo(() => {
+    const rows = events ?? [];
     const windowMs = RANGES[range];
-    if (!windowMs) return events;
+    if (!windowMs) return rows;
     const cutoff = Date.now() - windowMs;
-    return events.filter((e) => new Date(e.created_at).getTime() >= cutoff);
+    return rows.filter((e) => new Date(e.created_at).getTime() >= cutoff);
   }, [events, range]);
 
   const eventsByDay = useMemo(() => {
@@ -72,26 +76,29 @@ export function Analytics() {
         <Card>
           <h3 className="mb-3 text-sm font-semibold text-text-h">Events over time</h3>
           <div className="h-56">
+            {loading ? <Skeleton className="h-full w-full" /> : (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={eventsByDay}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
                 <XAxis dataKey="date" stroke="var(--color-text)" fontSize={11} />
                 <YAxis allowDecimals={false} stroke="var(--color-text)" fontSize={12} />
-                <Tooltip contentStyle={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 8 }} />
+                <Tooltip {...chartTooltip} />
                 <Area type="monotone" dataKey="count" stroke="var(--color-accent)" fill="var(--color-accent)" fillOpacity={0.2} />
               </AreaChart>
             </ResponsiveContainer>
+            )}
           </div>
         </Card>
         <Card>
           <h3 className="mb-3 text-sm font-semibold text-text-h">Subscriptions by status</h3>
           <div className="h-56">
+            {statusBreakdown === null ? <Skeleton className="h-full w-full" /> : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={statusBreakdown}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
                 <XAxis dataKey="status" stroke="var(--color-text)" fontSize={12} />
                 <YAxis allowDecimals={false} stroke="var(--color-text)" fontSize={12} />
-                <Tooltip contentStyle={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 8 }} />
+                <Tooltip {...chartTooltip} />
                 <Bar dataKey="count" radius={[4, 4, 0, 0]}>
                   {statusBreakdown.map((entry) => (
                     <Cell key={entry.status} fill={STATUS_CHART_COLORS[entry.status]} />
@@ -99,19 +106,26 @@ export function Analytics() {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+            )}
           </div>
         </Card>
       </div>
 
       <Card>
         <h3 className="mb-3 text-sm font-semibold text-text-h">
-          Recent events <span className="font-normal text-text/70">({filteredEvents.length})</span>
+          Recent events{' '}
+          {loading ? (
+            <Skeleton className="inline-block h-3 w-8 align-middle" />
+          ) : (
+            <span className="font-normal text-text/70">({filteredEvents.length})</span>
+          )}
         </h3>
         <Table>
           <Thead>
             <Tr><Th>Event</Th><Th>User</Th><Th>Product</Th><Th>Payload</Th><Th>Time</Th></Tr>
           </Thead>
           <Tbody>
+            {loading && <SkeletonRows cols={5} />}
             {filteredEvents.map((e) => (
               <Tr key={e.id}>
                 <Td>{e.event_type}</Td>

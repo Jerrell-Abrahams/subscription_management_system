@@ -19,8 +19,8 @@ async function authedFetch(path, options = {}) {
   return body;
 }
 
-export function createUser({ email, password, fullName }) {
-  return authedFetch('/api/admin/users', { method: 'POST', body: JSON.stringify({ email, password, fullName }) });
+export function createUser(payload) {
+  return authedFetch('/api/admin/users', { method: 'POST', body: JSON.stringify(payload) });
 }
 
 export function resetPassword(userId, password) {
@@ -53,4 +53,105 @@ export function suspendSubscription(id) {
 
 export function createWebsite(payload) {
   return authedFetch('/api/admin/websites', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function updateSubscription(id, payload) {
+  return authedFetch(`/api/admin/subscriptions/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+export function updateWebsite(id, payload) {
+  return authedFetch(`/api/admin/websites/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+export function deleteWebsite(id) {
+  return authedFetch(`/api/admin/websites/${id}`, { method: 'DELETE' });
+}
+
+// Invoices. Drafts are created and edited freely; everything from send onward is a
+// state transition the API owns, because it also assigns the number and files the PDF.
+export function createInvoice(payload) {
+  return authedFetch('/api/admin/invoices', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function updateInvoice(id, payload) {
+  return authedFetch(`/api/admin/invoices/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+export function sendInvoice(id) {
+  return authedFetch(`/api/admin/invoices/${id}/send`, { method: 'POST' });
+}
+
+export function payInvoice(id, payload) {
+  return authedFetch(`/api/admin/invoices/${id}/pay`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function voidInvoice(id, reason) {
+  return authedFetch(`/api/admin/invoices/${id}/void`, { method: 'POST', body: JSON.stringify({ reason }) });
+}
+
+// Signed on request rather than stored, so the link can't be a dead one by the time it's clicked.
+export function getInvoicePdfUrl(id, doc) {
+  return authedFetch(`/api/admin/invoices/${id}/pdf${doc === 'receipt' ? '?doc=receipt' : ''}`);
+}
+
+// The one Finance call that can't go straight to Supabase from the browser: the Payfast
+// passphrase is a server secret. Everything else on that page still reads and writes the
+// table directly. `from`/`to` are optional -- the server defaults to the last 90 days.
+export function syncPayfast(payload) {
+  return authedFetch('/api/admin/finance/payfast-sync', { method: 'POST', body: JSON.stringify(payload || {}) });
+}
+
+// Whole payload forwarded rather than picked apart: location/industry plus maxResults
+// and, when searching near you, latitude/longitude/radius. Rebuilding the body from a
+// destructured subset silently drops every field added later.
+export function searchLeads(payload) {
+  return authedFetch('/api/leads/search', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function getLeadSearchUsage() {
+  return authedFetch('/api/leads/usage');
+}
+
+// Returns the lead row whether it was created or already existed, so the finder can log
+// a call against it straight away.
+export function importOneLead(lead) {
+  return authedFetch('/api/leads/import-one', { method: 'POST', body: JSON.stringify({ lead }) });
+}
+
+export function logLeadActivity(leadId, payload) {
+  return authedFetch(`/api/leads/${leadId}/activities`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function updateLead(leadId, payload) {
+  return authedFetch(`/api/leads/${leadId}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+export function deleteLead(leadId) {
+  return authedFetch(`/api/leads/${leadId}`, { method: 'DELETE' });
+}
+
+// Progress is computed server-side, so goals are fetched through the API rather than
+// read straight from supabase like the other lists on the page.
+export function getLeadGoals(includeArchived) {
+  return authedFetch(`/api/leads/goals${includeArchived ? '?archived=true' : ''}`);
+}
+
+export function createLeadGoal(payload) {
+  return authedFetch('/api/leads/goals', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function updateLeadGoal(id, payload) {
+  return authedFetch(`/api/leads/goals/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+export function deleteLeadGoal(id) {
+  return authedFetch(`/api/leads/goals/${id}`, { method: 'DELETE' });
+}
+
+export function createLeadCategory(name) {
+  return authedFetch('/api/leads/categories', { method: 'POST', body: JSON.stringify({ name }) });
+}
+
+export function deleteLeadCategory(name) {
+  return authedFetch(`/api/leads/categories/${encodeURIComponent(name)}`, { method: 'DELETE' });
 }

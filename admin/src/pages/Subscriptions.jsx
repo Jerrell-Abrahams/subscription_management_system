@@ -7,8 +7,9 @@ import { createUser, createSubscription } from '../adminApi';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../components/ui/Table';
+import { Skeleton, SkeletonRows } from '../components/ui/Skeleton';
 import { StatusBadge } from '../components/ui/Badge';
-import { Input } from '../components/ui/Input';
+import { Field, Input } from '../components/ui/Input';
 import { Select, SelectItem } from '../components/ui/Select';
 
 const emptyForm = {
@@ -24,7 +25,7 @@ const emptyForm = {
 
 export function Subscriptions() {
   const [searchParams] = useSearchParams();
-  const [subscriptions, setSubscriptions] = useState([]);
+  const [subscriptions, setSubscriptions] = useState(null); // null = not loaded, [] = loaded empty
   const [users, setUsers] = useState([]);
   const [products, setProducts] = useState([]);
   const [search, setSearch] = useState('');
@@ -57,7 +58,10 @@ export function Subscriptions() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const filtered = subscriptions.filter((s) => {
+  const loading = subscriptions === null;
+  const rows = subscriptions ?? [];
+
+  const filtered = rows.filter((s) => {
     const q = search.toLowerCase();
     return (
       s.app_users?.email?.toLowerCase().includes(q) ||
@@ -65,7 +69,7 @@ export function Subscriptions() {
     );
   });
 
-  const activeCount = subscriptions.filter((s) => s.status === 'active').length;
+  const activeCount = rows.filter((s) => s.status === 'active').length;
 
   async function handleCreate(e) {
     e.preventDefault();
@@ -107,7 +111,12 @@ export function Subscriptions() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-text-h">
-          Subscriptions <span className="text-sm font-normal text-text/70">({subscriptions.length} total, {activeCount} active)</span>
+          Subscriptions{' '}
+          {loading ? (
+            <Skeleton className="inline-block h-3 w-36 align-middle" />
+          ) : (
+            <span className="text-sm font-normal text-text/70">({rows.length} total, {activeCount} active)</span>
+          )}
         </h2>
         <Button onClick={() => setShowForm(true)}>
           <Plus size={16} /> New subscription
@@ -134,6 +143,7 @@ export function Subscriptions() {
           </Tr>
         </Thead>
         <Tbody>
+          {loading && <SkeletonRows cols={6} />}
           {filtered.map((s) => (
             <Tr key={s.id} className="hover:bg-bg-alt/60">
               <Td><Link to={`/subscriptions/${s.id}`} className="text-accent hover:underline">{s.app_users?.email}</Link></Td>
@@ -149,67 +159,83 @@ export function Subscriptions() {
 
       <Modal open={showForm} onOpenChange={setShowForm} title="New subscription">
         <form onSubmit={handleCreate} className="space-y-3">
-          <label className="flex items-center gap-2 text-sm text-text">
-            <input
-              type="checkbox"
-              checked={form.isNewUser}
-              onChange={(e) => setForm({ ...form, isNewUser: e.target.checked })}
-            />
-            New user
-          </label>
+          <Field
+            as="div"
+            label="Customer"
+            hint={
+              form.isNewUser
+                ? 'Creating a customer here also sends them their login, the same as Add user does.'
+                : undefined
+            }
+          >
+            <label className="flex items-center gap-2 text-[13px] font-normal text-text">
+              <input
+                type="checkbox"
+                checked={form.isNewUser}
+                onChange={(e) => setForm({ ...form, isNewUser: e.target.checked })}
+              />
+              New customer
+            </label>
 
-          {form.isNewUser ? (
-            <div className="space-y-2">
-              <Input
-                type="email"
-                placeholder="Email"
-                value={form.newEmail}
-                onChange={(e) => setForm({ ...form, newEmail: e.target.value })}
-                required
-              />
-              <Input
-                placeholder="Password"
-                value={form.newPassword}
-                onChange={(e) => setForm({ ...form, newPassword: e.target.value })}
-                required
-              />
-              <Input
-                placeholder="Full name (optional)"
-                value={form.newFullName}
-                onChange={(e) => setForm({ ...form, newFullName: e.target.value })}
-              />
-            </div>
-          ) : (
-            <Select value={form.userId} onValueChange={(v) => setForm({ ...form, userId: v })} placeholder="Select user…">
-              {users.map((u) => (
-                <SelectItem key={u.id} value={u.id}>{u.email}</SelectItem>
+            {form.isNewUser ? (
+              <div className="space-y-2">
+                <Input
+                  type="email"
+                  placeholder="Email"
+                  value={form.newEmail}
+                  onChange={(e) => setForm({ ...form, newEmail: e.target.value })}
+                  required
+                />
+                <Input
+                  placeholder="Password"
+                  value={form.newPassword}
+                  onChange={(e) => setForm({ ...form, newPassword: e.target.value })}
+                  required
+                />
+                <Input
+                  placeholder="Full name (optional)"
+                  value={form.newFullName}
+                  onChange={(e) => setForm({ ...form, newFullName: e.target.value })}
+                />
+              </div>
+            ) : (
+              <Select value={form.userId} onValueChange={(v) => setForm({ ...form, userId: v })} placeholder="Select customer…">
+                {users.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>{u.email}</SelectItem>
+                ))}
+              </Select>
+            )}
+          </Field>
+
+          <Field label="Product">
+            <Select value={form.productId} onValueChange={(v) => setForm({ ...form, productId: v })} placeholder="Select product…">
+              {products.map((p) => (
+                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
               ))}
             </Select>
-          )}
+          </Field>
 
-          <Select value={form.productId} onValueChange={(v) => setForm({ ...form, productId: v })} placeholder="Select product…">
-            {products.map((p) => (
-              <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-            ))}
-          </Select>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Billing">
+              <Select
+                value={form.billingInterval}
+                onValueChange={(v) => setForm({ ...form, billingInterval: v })}
+              >
+                <SelectItem value="monthly">monthly</SelectItem>
+                <SelectItem value="yearly">yearly</SelectItem>
+              </Select>
+            </Field>
 
-          <div className="flex gap-2">
-            <Select
-              value={form.billingInterval}
-              onValueChange={(v) => setForm({ ...form, billingInterval: v })}
-              className="flex-1"
-            >
-              <SelectItem value="monthly">monthly</SelectItem>
-              <SelectItem value="yearly">yearly</SelectItem>
-            </Select>
-            <Input
-              type="number"
-              min="1"
-              value={form.maxActivations}
-              onChange={(e) => setForm({ ...form, maxActivations: e.target.value })}
-              title="Max activations"
-              className="w-28"
-            />
+            {/* Was a bare number box whose only clue was a title tooltip -- invisible unless
+                you happened to hover it. */}
+            <Field label="Max activations" hint="Devices that may run this at once.">
+              <Input
+                type="number"
+                min="1"
+                value={form.maxActivations}
+                onChange={(e) => setForm({ ...form, maxActivations: e.target.value })}
+              />
+            </Field>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">

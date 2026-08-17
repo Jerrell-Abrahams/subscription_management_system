@@ -3,7 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>license-platform admin</title>
+    <title>Complex AI Console</title>
+    <!-- Generated from logo-light.svg: the glyph paths only (everything left of the
+         wordmark), on a square viewBox. The full lockup is 822x257 and would letterbox
+         into an illegible strip at 16px. Its fill flips with the browser's theme, not the
+         console's -- this sits in the tab bar, not on the page. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      // Applies the stored theme before first paint. Inline and synchronous on purpose:
+      // in a module script this runs after the first frame, and a dark-default console
+      // flashes white on every load for anyone who chose light. Dark needs no attribute.
+      try {
+        if (localStorage.getItem('theme') === 'light') {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      } catch {
+        /* private mode: storage throws, dark default is fine */
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

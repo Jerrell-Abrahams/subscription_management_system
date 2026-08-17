@@ -1,4 +1,9 @@
 {
   "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }],
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "assets/**"
+    }
+  },
   "crons": [{ "path": "/api/cron/expire-subscriptions", "schedule": "0 0 * * *" }]
 }

@@ -1,31 +1,139 @@
 @import "tailwindcss";
 
+/* Re-point Tailwind's `dark:` variant at the theme attribute. By default it compiles to
+ * @media (prefers-color-scheme: dark), which stopped being the truth the moment the theme
+ * became a toggle -- a light-OS machine using the app in dark mode would get every
+ * `dark:` colour from the wrong branch. Dark carries no attribute, so the condition is
+ * "root is not explicitly light". Still used by Leads, Finance and InvoicesCard for
+ * literal Tailwind palette colours; harmless once those move to --ok/--warn/--bad. */
+@custom-variant dark (&:where(:root:not([data-theme="light"]) *));
+
+/* Complex AI admin console theme.
+ *
+ * Dark is the default and light is opt-in via data-theme="light" on <html> -- the
+ * opposite of the old prefers-color-scheme setup, and deliberate: the console is a
+ * dark product with a light escape hatch, not a light one that adapts.
+ *
+ * Depth comes from hairlines, not shadows. There is one shadow token and it is barely
+ * used; if something looks flat, the fix is a --border rule, not elevation. */
 @theme {
-  --font-sans: system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-sans: Geist, ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
 
-  --color-accent: #6b4bff;
-  --color-accent-dark: #a78bfa;
+  --color-bg: #0a0a0a; /* page */
+  --color-panel: #0f0f0f; /* cards, sidebar, table body */
+  --color-raised: #161616; /* table headers, row hover, active nav */
+  --color-border: #232323; /* hairlines between rows, card borders */
+  --color-border-2: #2f2f2f; /* input/button borders, stronger dividers */
 
+  --color-text: #ededed; /* primary */
+  --color-muted: #a1a1a1; /* secondary text, table cells */
+  --color-dim: #6e6e6e; /* labels, metadata, timestamps */
+
+  --color-accent: #00c08b;
+  --color-accent-ink: #04120e; /* text on accent fills */
+
+  /* Status. Shared by subscriptions, invoices, websites and leads -- rendered as a 7px
+   * dot plus a lowercase label in the status colour, never as a filled pill. */
+  --color-ok: #00c08b; /* active, paid, live */
+  --color-warn: #f0b429; /* pending, past_due, sent, overdue-soon */
+  --color-bad: #ff5a5a; /* expired, revoked, suspended */
+  --color-neutral: #7a7a7a; /* canceled, draft, void */
+
+  --color-chart-cursor: #161616; /* bar-hover band; see lib/chart.js */
+
+  /* Skeleton bar fill. Deliberately not --raised: in light mode raised (#ffffff) sits on
+   * panel (#fafafa), so a raised-filled bar would be invisible and inverted. */
+  --color-skeleton: #1c1c1c;
+
+  /* Overlay motion. Radix keeps a closing element mounted while a CSS animation runs on
+   * its [data-state="closed"], so exits need no JS -- only these keyframes. Durations are
+   * short on purpose: this is a console, motion should read as responsiveness. */
+  --animate-overlay-in: overlay-in 140ms ease-out;
+  --animate-overlay-out: overlay-out 120ms ease-in;
+  --animate-pop-in: pop-in 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-pop-out: pop-out 120ms ease-in;
+  --animate-menu-in: menu-in 120ms ease-out;
+  --animate-menu-out: menu-out 100ms ease-in;
+
+  @keyframes overlay-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes overlay-out {
+    to {
+      opacity: 0;
+    }
+  }
+
+  /* Dialogs are centred with -translate-x/y-1/2, so the keyframe has to carry that
+   * translate through or the box jumps to the corner for the length of the animation. */
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.98);
+    }
+  }
+  @keyframes pop-out {
+    to {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.98);
+    }
+  }
+
+  /* Popovers grow from their trigger via Radix's transform-origin custom property. */
+  @keyframes menu-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+  }
+  @keyframes menu-out {
+    to {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+  }
+
+  /* Aliases for the pages not yet restyled. The old palette had four names; these map
+   * them onto the new set so every screen still renders while the redesign lands one
+   * screen at a time. Delete each one as its last consumer is converted --
+   * `grep -r "bg-alt\|text-h" admin/src` is the check for whether it is still load-bearing. */
+  --color-bg-alt: var(--color-raised);
+  --color-text-h: var(--color-text);
+}
+
+:root[data-theme="light"] {
   --color-bg: #ffffff;
-  --color-bg-alt: #f6f6f7;
-  --color-border: #e0e0e3;
-  --color-text: #3b3b3b;
-  --color-text-h: #08060d;
+  --color-panel: #fafafa;
+  --color-raised: #ffffff;
+  --color-border: #eaeaea;
+  --color-border-2: #dcdcdc;
+
+  --color-text: #0a0a0a;
+  --color-muted: #5f5f5f;
+  --color-dim: #8a8a8a;
+
+  --color-accent-ink: #ffffff;
+  --color-chart-cursor: #efefef;
+  --color-skeleton: #ececec;
 }
 
 :root {
-  color-scheme: light dark;
+  /* Table row padding. The design ships three densities (compact 8 / balanced 11 /
+   * airy 15) driven off this one token, so a density control is a single style write
+   * rather than a prop threaded through every table. */
+  --rp: 11px;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: #16171d;
-    --color-bg-alt: #1e1f27;
-    --color-border: #2e303a;
-    --color-text: #c7c7cc;
-    --color-text-h: #f3f4f6;
-    --color-accent: var(--color-accent-dark);
-  }
+:root[data-theme="light"] {
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
@@ -33,4 +141,39 @@ body {
   font-family: var(--font-sans);
   color: var(--color-text);
   background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* In @layer base, not bare: unlayered rules outrank every Tailwind layer, so a bare `a`
+ * selector beat `text-muted`/`text-text` on the sidebar links and painted them accent. */
+@layer base {
+  a {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+
+  /* Tailwind v4's preflight sets buttons to cursor: default, so nothing in the console
+   * showed a pointer. Disabled ones keep the default -- and the `cursor-*` utilities
+   * still win over this, which is what the inert sidebar search relies on. */
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+::selection {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+}
+
+/* The CSS half of reduced motion -- Radix overlay keyframes and the skeleton pulse. The
+ * motion/react half is handled by <MotionConfig reducedMotion="user"> in App.jsx. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -7,11 +7,13 @@ import { cancelSubscription, revokeSubscription, renewSubscription } from '../ad
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../components/ui/Table';
+import { Skeleton } from '../components/ui/Skeleton';
 import { StatusBadge } from '../components/ui/Badge';
-import { Input } from '../components/ui/Input';
+import { Field, Input } from '../components/ui/Input';
 import { Select, SelectItem } from '../components/ui/Select';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { ResetPasswordModal } from '../components/ResetPasswordModal';
+import { InvoicesCard } from '../components/InvoicesCard';
 
 function toDateInputValue(iso) {
   return iso ? iso.slice(0, 10) : '';
@@ -22,6 +24,13 @@ function toDateInputValue(iso) {
 // only create meaningless states. Existing past_due rows still render via
 // the disabled-option fallback below.
 const EDITABLE_STATUSES = ['pending', 'active'];
+
+// Add-on modules each product can sell. Mirrors PRODUCT_MODULES in src/lib/modules.js — kept as a
+// fixed list rather than free text because the consuming app matches these slugs exactly and
+// silently ignores anything else, so a typo would look like "the module just doesn't turn on".
+const PRODUCT_MODULES = {
+  'pos-system': [{ slug: 'wholesale', label: 'Wholesaler' }],
+};
 
 export function SubscriptionDetail() {
   const { id } = useParams();
@@ -36,7 +45,8 @@ export function SubscriptionDetail() {
 
   async function load() {
     const [{ data: subRow }, { data: activationRows }] = await Promise.all([
-      supabase.from('subscriptions').select('*, app_users(email), products(name)').eq('id', id).single(),
+      // products(slug) drives which add-on modules this product can sell (see PRODUCT_MODULES).
+      supabase.from('subscriptions').select('*, app_users(email), products(name, slug)').eq('id', id).single(),
       supabase.from('activations').select('*').eq('subscription_id', id).order('activated_at', { ascending: false }),
     ]);
     setSubscription(subRow);
@@ -47,6 +57,7 @@ export function SubscriptionDetail() {
       billing_interval: subRow?.billing_interval ?? 'monthly',
       current_period_end: toDateInputValue(subRow?.current_period_end),
       super_user_code: subRow?.super_user_code ?? '',
+      modules: subRow?.modules ?? [],
     });
   }
 
@@ -72,6 +83,7 @@ export function SubscriptionDetail() {
         billing_interval: form.billing_interval,
         current_period_end: form.current_period_end ? new Date(form.current_period_end).toISOString() : null,
         super_user_code: code || null,
+        modules: form.modules,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id);
@@ -129,17 +141,61 @@ export function SubscriptionDetail() {
     }
   }
 
-  if (!subscription || !form) return <p className="p-8 text-sm text-text/70">Loading…</p>;
+  // Still a whole-page gate -- every block below reads `subscription` -- but a shaped one,
+  // so the page settles into its layout instead of replacing a line of text with a screen.
+  if (!subscription || !form)
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-4 w-40" />
+        <div className="flex items-start justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-6 w-64" />
+            <Skeleton className="h-3.5 w-32" />
+          </div>
+          <div className="flex gap-2">
+            {[0, 1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-8 w-28" />
+            ))}
+          </div>
+        </div>
+        <Card className="space-y-4">
+          <Skeleton className="h-3.5 w-28" />
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {[0, 1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-[34px]" />
+            ))}
+          </div>
+        </Card>
+        <Card>
+          <Skeleton className="h-3.5 w-28" />
+        </Card>
+      </div>
+    );
 
   const canCancel = !['canceled', 'expired', 'revoked'].includes(subscription.status);
   const canRevoke = subscription.status !== 'revoked';
   const canRenew = subscription.status !== 'revoked';
+  const availableModules = PRODUCT_MODULES[subscription.products?.slug] ?? [];
+  const savedModules = subscription.modules ?? [];
+  // Order-insensitive: the checkbox order and Postgres's stored order need not agree, and a
+  // difference in order alone must not light up the Save button.
+  const modulesChanged =
+    form.modules.length !== savedModules.length || form.modules.some((m) => !savedModules.includes(m));
+
   const isDirty =
     form.status !== subscription.status ||
     Number(form.max_activations) !== subscription.max_activations ||
     form.billing_interval !== subscription.billing_interval ||
     form.current_period_end !== toDateInputValue(subscription.current_period_end) ||
-    form.super_user_code.trim() !== (subscription.super_user_code ?? '');
+    form.super_user_code.trim() !== (subscription.super_user_code ?? '') ||
+    modulesChanged;
+
+  function toggleModule(slug) {
+    setForm((f) => ({
+      ...f,
+      modules: f.modules.includes(slug) ? f.modules.filter((m) => m !== slug) : [...f.modules, slug],
+    }));
+  }
 
   return (
     <div className="space-y-6">
@@ -175,8 +231,7 @@ export function SubscriptionDetail() {
         <h3 className="mb-4 text-sm font-semibold text-text-h">Subscription</h3>
         <form onSubmit={handleSave}>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <label className="flex flex-col gap-1.5 text-xs font-medium text-text/70">
-              Status
+            <Field label="Status">
               <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
                 {!EDITABLE_STATUSES.includes(subscription.status) && (
                   <SelectItem value={subscription.status} disabled>{subscription.status}</SelectItem>
@@ -185,34 +240,34 @@ export function SubscriptionDetail() {
                   <SelectItem key={s} value={s}>{s}</SelectItem>
                 ))}
               </Select>
-            </label>
-            <label className="flex flex-col gap-1.5 text-xs font-medium text-text/70">
-              Billing interval
+            </Field>
+            <Field label="Billing interval">
               <Select value={form.billing_interval} onValueChange={(v) => setForm({ ...form, billing_interval: v })}>
                 <SelectItem value="monthly">monthly</SelectItem>
                 <SelectItem value="yearly">yearly</SelectItem>
               </Select>
-            </label>
-            <label className="flex flex-col gap-1.5 text-xs font-medium text-text/70">
-              Max activations
+            </Field>
+            <Field label="Max activations">
               <Input
                 type="number"
                 min="1"
                 value={form.max_activations}
                 onChange={(e) => setForm({ ...form, max_activations: e.target.value })}
               />
-            </label>
-            <label className="flex flex-col gap-1.5 text-xs font-medium text-text/70">
-              Current period end
+            </Field>
+            <Field label="Current period end">
               <Input
                 type="date"
                 value={form.current_period_end}
                 onChange={(e) => setForm({ ...form, current_period_end: e.target.value })}
               />
-            </label>
+            </Field>
           </div>
-          <label className="mt-4 flex flex-col gap-1.5 text-xs font-medium text-text/70">
-            Super user support code
+          <Field
+            className="mt-4"
+            label="Super user support code"
+            hint="Signs support into this customer's POS with manager rights. Use a unique code per subscription. The till applies a change after its next online status check (≤6h) — it won't reach a currently-offline till until it reconnects."
+          >
             <Input
               inputMode="numeric"
               placeholder="4–6 digits, blank to disable"
@@ -220,12 +275,35 @@ export function SubscriptionDetail() {
               onChange={(e) => setForm({ ...form, super_user_code: e.target.value })}
               className="sm:max-w-xs"
             />
-            <span className="font-normal text-text/50">
-              Signs support into this customer's POS with manager rights. Use a unique code per
-              subscription. The till applies a change after its next online status check (≤6h) — it
-              won't reach a currently-offline till until it reconnects.
-            </span>
-          </label>
+          </Field>
+          {availableModules.length > 0 && (
+            <Field
+              as="div"
+              className="mt-4"
+              label="Add-on modules"
+              hint="Unlocks paid parts of the product. A customer without a module sees no trace of it. Like the support code, the app applies a change after its next online status check (≤6h) — turning one off does not reach a currently-offline device until it reconnects."
+            >
+              <div className="flex flex-wrap gap-2">
+                {availableModules.map((module) => {
+                  const enabled = form.modules.includes(module.slug);
+                  return (
+                    <button
+                      key={module.slug}
+                      type="button"
+                      onClick={() => toggleModule(module.slug)}
+                      className={`rounded-md border px-3 py-1.5 text-sm transition ${
+                        enabled
+                          ? 'border-accent bg-accent/10 text-accent'
+                          : 'border-border text-text/60 hover:text-text'
+                      }`}
+                    >
+                      {module.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+          )}
           <div className="mt-5 flex items-center justify-end border-t border-border pt-4">
             <Button type="submit" disabled={!isDirty}>
               <Save size={15} /> Save changes
@@ -233,6 +311,8 @@ export function SubscriptionDetail() {
           </div>
         </form>
       </Card>
+
+      <InvoicesCard subscriptionId={id} />
 
       <Card>
         <h3 className="mb-3 text-sm font-semibold text-text-h">

@@ -9,7 +9,7 @@ const router = express.Router();
 router.use(adminAuth);
 
 router.post('/users', async (req, res) => {
-  const { email, password, fullName } = req.body;
+  const { email, password, fullName, phone, companyName, billingAddress } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'email and password are required' });
   }
@@ -25,7 +25,16 @@ router.post('/users', async (req, res) => {
 
   const { data: profile, error: profileError } = await supabase
     .from('app_users')
-    .insert({ id: created.user.id, email, full_name: fullName || null })
+    // company_name/billing_address are the invoice Bill To block (src/db/invoices.sql).
+    // Both optional -- they simply don't render on the PDF when blank.
+    .insert({
+      id: created.user.id,
+      email,
+      full_name: fullName || null,
+      phone: phone || null,
+      company_name: companyName || null,
+      billing_address: billingAddress || null,
+    })
     .select()
     .single();
   if (profileError) {
@@ -124,6 +133,57 @@ function setStatusHandler(status) {
     res.json(data);
   };
 }
+// Field-level corrections: reassign an owner, fix a billing interval, adjust a period end,
+// set a status straight. Distinct from the transition routes below -- those carry meaning
+// ("renew" also extends the period), this one only writes what you hand it. Mirrors the
+// check constraints in src/db/schema.sql so a bad value is a 400 here rather than a raw
+// Postgres error at the client.
+const SUB_STATUSES = ['pending', 'active', 'past_due', 'canceled', 'expired', 'revoked'];
+
+router.patch('/subscriptions/:id', async (req, res) => {
+  const { userId, status, billingInterval, currentPeriodEnd } = req.body;
+  const patch = {};
+
+  if (userId !== undefined) patch.user_id = userId;
+  if (status !== undefined) {
+    if (!SUB_STATUSES.includes(status)) {
+      return res.status(400).json({ error: `status must be one of ${SUB_STATUSES.join(', ')}` });
+    }
+    patch.status = status;
+  }
+  if (billingInterval !== undefined) {
+    if (!['monthly', 'yearly'].includes(billingInterval)) {
+      return res.status(400).json({ error: 'billingInterval must be monthly or yearly' });
+    }
+    patch.billing_interval = billingInterval;
+  }
+  if (currentPeriodEnd !== undefined) {
+    const end = new Date(currentPeriodEnd);
+    if (Number.isNaN(end.getTime())) {
+      return res.status(400).json({ error: 'currentPeriodEnd is invalid' });
+    }
+    patch.current_period_end = end.toISOString();
+  }
+  if (Object.keys(patch).length === 0) {
+    return res.status(400).json({ error: 'nothing to update' });
+  }
+
+  patch.updated_at = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .update(patch)
+    .eq('id', req.params.id)
+    .select()
+    .single();
+  if (error) {
+    // 23503 = user_id pointing at an app_users row that isn't there.
+    if (error.code === '23503') return res.status(400).json({ error: 'That owner does not exist' });
+    return res.status(error.code === 'PGRST116' ? 404 : 400).json({ error: error.message });
+  }
+
+  res.json(data);
+});
+
 router.patch('/subscriptions/:id/cancel', setStatusHandler('canceled'));
 router.patch('/subscriptions/:id/revoke', setStatusHandler('revoked'));
 // Suspend a website (or any subscription) for non-payment. past_due, not revoked, so
@@ -194,6 +254,71 @@ router.post('/websites', async (req, res) => {
   }
 
   res.status(201).json(website);
+});
+
+const WEBSITE_KINDS = ['client', 'demo', 'internal'];
+
+router.patch('/websites/:id', async (req, res) => {
+  const { domain, kind } = req.body;
+  const patch = {};
+
+  if (domain !== undefined) {
+    const host = normalizeDomain(domain);
+    if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(host)) {
+      return res.status(400).json({ error: 'domain is not a valid hostname' });
+    }
+    patch.domain = host;
+  }
+  if (kind !== undefined) {
+    if (!WEBSITE_KINDS.includes(kind)) {
+      return res.status(400).json({ error: `kind must be one of ${WEBSITE_KINDS.join(', ')}` });
+    }
+    patch.kind = kind;
+  }
+  if (Object.keys(patch).length === 0) {
+    return res.status(400).json({ error: 'nothing to update' });
+  }
+
+  const { data, error } = await supabase
+    .from('websites')
+    .update(patch)
+    .eq('id', req.params.id)
+    .select('id, domain, kind')
+    .single();
+  if (error) {
+    if (error.code === '23505') return res.status(409).json({ error: 'Domain already registered' });
+    // websites_client_needs_subscription (src/db/website_kinds.sql). Reworded because the
+    // raw constraint violation says nothing about what the admin actually did wrong.
+    if (error.code === '23514') {
+      return res.status(409).json({ error: 'A client website needs a subscription -- add it from Add website instead' });
+    }
+    return res.status(error.code === 'PGRST116' ? 404 : 400).json({ error: error.message });
+  }
+
+  res.json(data);
+});
+
+// Deletes the websites row ONLY, never the subscription. invoices.subscription_id is
+// `on delete cascade` (src/db/invoices.sql), so removing a subscription here would take
+// its invoices with it -- financial records destroyed to unregister a domain. A client
+// site's billing is ended from the subscription itself, deliberately somewhere else.
+router.delete('/websites/:id', async (req, res) => {
+  const { data, error } = await supabase
+    .from('websites')
+    .delete()
+    .eq('id', req.params.id)
+    .select('id')
+    .maybeSingle();
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+  if (!data) {
+    return res.status(404).json({ error: 'Website not found' });
+  }
+
+  // A body, not 204: authedFetch in the admin client always parses a JSON response, and
+  // an empty one throws. Matches DELETE /users/:id.
+  res.json({ success: true });
 });
 
 // Replaces the removed self-service POST /api/subscription/renew -- renewal
