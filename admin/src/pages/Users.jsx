@@ -107,7 +107,7 @@ export function Users() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-semibold text-text-h">
           Users{' '}
           {users === null ? (
@@ -171,7 +171,9 @@ export function Users() {
 
       <Modal open={showForm} onOpenChange={setShowForm} title="Add user">
         <form onSubmit={handleCreate} className="space-y-3">
-          <Field label="Email" hint="Their login, and where the onboarding email goes.">
+          {/* Nothing is emailed on create -- the hint has to say so, or the password on
+              this screen is the only copy in existence and the modal closes over it. */}
+          <Field label="Email" hint="Their login. Nothing is emailed — send them the password yourself.">
             <Input
               type="email"
               value={form.email}

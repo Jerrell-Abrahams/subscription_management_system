@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { NavLink, useLocation, useNavigate, useOutlet } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
+import * as Dialog from '@radix-ui/react-dialog';
 import {
   LayoutGrid,
   CreditCard,
@@ -8,15 +10,20 @@ import {
   Globe,
   Package,
   Wallet,
+  Receipt,
+  FileText,
   Rocket,
   Activity,
   SlidersHorizontal,
   ChevronsUpDown,
   LogOut,
+  Menu,
   Plus,
   ExternalLink,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../supabaseClient';
+import { today } from '../lib/format';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from './ui/DropdownMenu';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
@@ -26,8 +33,6 @@ import { Logo } from './Logo';
 
 // Labels follow the redesign (Dashboard→Overview, Users→Customers, Products→Plans,
 // Updates→Releases); the routes are unchanged, so nothing else in the app moves.
-// Billing is in the design but has no screen yet -- it joins this list with its page
-// rather than shipping as a nav item that leads nowhere.
 const navMain = [
   { to: '/', label: 'Overview', icon: LayoutGrid, end: true },
   { to: '/subscriptions', label: 'Subscriptions', icon: CreditCard },
@@ -36,6 +41,8 @@ const navMain = [
   { to: '/websites', label: 'Websites', icon: Globe },
   { to: '/products', label: 'Plans', icon: Package },
   { to: '/finance', label: 'Finance', icon: Wallet },
+  { to: '/invoices', label: 'Invoices', icon: Receipt },
+  { to: '/documents', label: 'Documents', icon: FileText },
 ];
 
 const navSecondary = [
@@ -83,7 +90,7 @@ const consoles = [
   },
 ];
 
-function NavItem({ to, label, icon: Icon, end }) {
+function NavItem({ to, label, icon: Icon, end, badge }) {
   return (
     <NavLink
       to={to}
@@ -99,6 +106,13 @@ function NavItem({ to, label, icon: Icon, end }) {
         <>
           <Icon size={18} className={isActive ? 'text-accent' : 'text-dim'} />
           {label}
+          {/* Only ever a count of things that are actionable TODAY. A badge that is always
+              lit is a badge you stop seeing, so 0 renders nothing at all. */}
+          {badge > 0 && (
+            <span className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-bad/15 px-1.5 text-[10.5px] font-medium text-bad">
+              {badge}
+            </span>
+          )}
         </>
       )}
     </NavLink>
@@ -145,6 +159,22 @@ export function Layout({ loading }) {
   // concrete element captured at this render, which is what the exiting frame needs.
   const outlet = useOutlet();
 
+  // Two head-only counts (no rows come back), re-run on every navigation so the badge
+  // can't keep claiming three overdue invoices right after you marked all three paid.
+  // Gated on `loading` because ProtectedRoute hasn't resolved the session yet, and these
+  // read RLS-protected tables.
+  const [badges, setBadges] = useState({});
+  useEffect(() => {
+    if (loading) return;
+    const count = { count: 'exact', head: true };
+    Promise.all([
+      supabase.from('invoices').select('id', count).eq('status', 'sent').lt('due_date', today()),
+      supabase.from('leads').select('id', count).eq('status', 'follow_up').lte('follow_up_date', today()),
+    ]).then(([invoices, leads]) =>
+      setBadges({ '/invoices': invoices.count ?? 0, '/leads': leads.count ?? 0 })
+    );
+  }, [pathname, loading]);
+
   // A subscription detail page reads as "Subscription" in the crumb while keeping
   // Subscriptions lit in the sidebar -- matched before the list so /subscriptions/:id
   // doesn't fall through to the plain "Subscriptions" label.
@@ -157,16 +187,31 @@ export function Layout({ loading }) {
   const email = session?.user?.email || '';
   const initials = email.slice(0, 2).toUpperCase();
 
-  return (
-    <div className="flex min-h-screen bg-bg text-text">
-      <aside className="sticky top-0 flex h-screen w-[236px] flex-none flex-col border-r border-border bg-panel">
+  // Below lg the sidebar is a drawer. Closing on every navigation is the whole of its
+  // state management -- tapping a link there is always "go there and get out of my way".
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => setMenuOpen(false), [pathname]);
+
+  // Widening past lg hides the drawer by CSS but leaves Radix's scroll lock on, which
+  // reads as a frozen page. Closing it on the breakpoint crossing is the whole fix.
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 64rem)');
+    const close = () => mq.matches && setMenuOpen(false);
+    mq.addEventListener('change', close);
+    return () => mq.removeEventListener('change', close);
+  }, []);
+
+  // One copy of the sidebar body, rendered by the desktop <aside> or by the drawer. The
+  // drawer's Dialog.Portal only mounts while open, so this is never in the tree twice.
+  const sidebar = (
+    <>
         <div className="border-b border-border px-4 pb-3.5 pt-[18px]">
           <Logo className="h-[42px]" />
         </div>
 
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2.5 pt-3">
           {navMain.map((l) => (
-            <NavItem key={l.to} {...l} />
+            <NavItem key={l.to} {...l} badge={badges[l.to]} />
           ))}
           <div className="px-2.5 pb-1.5 pt-4 font-mono text-[10px] uppercase tracking-[0.14em] text-dim">
             Distribution
@@ -236,16 +281,46 @@ export function Layout({ loading }) {
           </DropdownMenu>
           )}
         </div>
+    </>
+  );
+
+  return (
+    <div className="flex min-h-screen bg-bg text-text">
+      <aside className="sticky top-0 hidden h-screen w-[236px] flex-none flex-col border-r border-border bg-panel lg:flex">
+        {sidebar}
       </aside>
 
+      {/* Radix Dialog rather than a hand-rolled translate: focus trap, Escape, background
+          scroll lock and the exit animation all come with it, and it is already a
+          dependency for every modal in the app. */}
+      <Dialog.Root open={menuOpen} onOpenChange={setMenuOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-40 bg-black/60 data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out lg:hidden" />
+          <Dialog.Content
+            aria-describedby={undefined}
+            className="fixed inset-y-0 left-0 z-50 flex w-[236px] flex-col border-r border-border bg-panel focus:outline-none data-[state=open]:animate-drawer-in data-[state=closed]:animate-drawer-out lg:hidden"
+          >
+            <Dialog.Title className="sr-only">Navigation</Dialog.Title>
+            {sidebar}
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-5 flex h-[54px] flex-none items-center gap-3.5 border-b border-border bg-bg px-6">
-          <div className="flex items-center gap-2 text-[13px]">
-            <span className="text-dim">complex-ai</span>
-            <span className="text-border-2">/</span>
-            <span className="font-medium text-text">{screenTitle}</span>
+        <header className="sticky top-0 z-5 flex h-[54px] flex-none items-center gap-3 border-b border-border bg-bg px-4 sm:gap-3.5 sm:px-6">
+          <button
+            onClick={() => setMenuOpen(true)}
+            aria-label="Open navigation"
+            className="-ml-1.5 rounded-md p-1.5 text-muted transition-colors hover:bg-raised hover:text-text lg:hidden"
+          >
+            <Menu size={19} />
+          </button>
+          <div className="flex min-w-0 items-center gap-2 text-[13px]">
+            <span className="hidden text-dim sm:inline">complex-ai</span>
+            <span className="hidden text-border-2 sm:inline">/</span>
+            <span className="truncate font-medium text-text">{screenTitle}</span>
           </div>
-          <span className="inline-flex h-[22px] items-center gap-1.5 rounded-full border border-border-2 px-2 text-[11px] text-muted">
+          <span className="hidden h-[22px] items-center gap-1.5 rounded-full border border-border-2 px-2 text-[11px] text-muted md:inline-flex">
             <span className="h-1.5 w-1.5 rounded-full bg-ok" />
             Production
           </span>
@@ -254,13 +329,18 @@ export function Layout({ loading }) {
             {/* ponytail: routes to the list rather than opening its modal from here.
                 Cross-page modal state needs a query param both sides agree on -- worth it
                 when the Subscriptions screen is rebuilt, not before. */}
-            <Button disabled={loading} onClick={() => navigate('/subscriptions')}>
-              <Plus size={16} /> New subscription
+            <Button
+              disabled={loading}
+              aria-label="New subscription"
+              className="max-sm:w-8 max-sm:px-0"
+              onClick={() => navigate('/subscriptions')}
+            >
+              <Plus size={16} /> <span className="max-sm:hidden">New subscription</span>
             </Button>
           </div>
         </header>
 
-        <main className="flex-1 px-6 pb-16 pt-7">
+        <main className="flex-1 px-4 pb-16 pt-6 sm:px-6 sm:pt-7">
           {/* mode="wait" runs the exit to completion before the enter starts, which keeps
               both pages out of the flex flow at once -- an overlapping crossfade would
               need absolute positioning and would drop the gap-[22px] rhythm below. The

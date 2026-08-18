@@ -203,7 +203,7 @@ export function SubscriptionDetail() {
         <ArrowLeft size={14} /> Back to subscriptions
       </Link>
 
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-semibold text-text-h">
             {subscription.app_users?.email}
@@ -211,7 +211,7 @@ export function SubscriptionDetail() {
           </h2>
           <p className="text-sm text-text/70">{subscription.products?.name}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => setResetPasswordOpen(true)}>
             <KeyRound size={15} /> Reset password
           </Button>

@@ -62,7 +62,7 @@ export function Analytics() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-semibold text-text-h">Analytics</h2>
         <Select value={range} onValueChange={setRange} className="w-40">
           <SelectItem value="24h">Last 24h</SelectItem>

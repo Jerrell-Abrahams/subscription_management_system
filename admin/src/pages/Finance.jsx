@@ -222,9 +222,9 @@ export function Finance() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-semibold text-text-h">Finance</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Safari has no type="month" and falls back to a text box -- the pattern keeps
               that fallback usable rather than silently accepting anything. */}
           <Input
@@ -400,7 +400,7 @@ export function Finance() {
               </p>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Date">
                 <Input
                   type="date"
@@ -486,7 +486,7 @@ export function Finance() {
               Safe to run as often as you like — anything already imported is skipped, and your categories are never
               overwritten. This also runs by itself every night.
             </p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="From">
                 <Input
                   type="date"

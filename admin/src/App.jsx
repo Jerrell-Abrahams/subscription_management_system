@@ -15,6 +15,8 @@ import { Updates } from './pages/Updates';
 import { Analytics } from './pages/Analytics';
 import { Leads } from './pages/Leads';
 import { Finance } from './pages/Finance';
+import { Invoices } from './pages/Invoices';
+import { Documents } from './pages/Documents';
 import { Settings } from './pages/Settings';
 
 export default function App() {
@@ -44,6 +46,8 @@ export default function App() {
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/leads" element={<Leads />} />
               <Route path="/finance" element={<Finance />} />
+              <Route path="/invoices" element={<Invoices />} />
+              <Route path="/documents" element={<Documents />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
           </Routes>

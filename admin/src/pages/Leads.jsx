@@ -28,6 +28,7 @@ import { Skeleton, SkeletonRows } from '../components/ui/Skeleton';
 import { StatusBadge } from '../components/ui/Badge';
 import { Input } from '../components/ui/Input';
 import { Select, SelectItem } from '../components/ui/Select';
+import { readSavedResults, saveResults, freshnessLabel } from '../lib/leadResults';
 
 // Mirrors the method/outcome/status check constraints in src/db/leads.sql. Duplicated
 // from src/lib/leads.js because the Vite bundle can't import CommonJS from src/ --
@@ -42,12 +43,15 @@ const METHODS = [
 const OUTCOMES = [
   { value: 'no_answer', label: 'No answer / no decision-maker' },
   { value: 'follow_up', label: 'Follow up' },
+  // Sits next to Follow up because it is the version with no date: they said they would
+  // come back to you, so there is nothing to put in the follow-ups-due list.
+  { value: 'might_return', label: 'Might get back to me' },
   { value: 'potential', label: 'Potential lead' },
   { value: 'converted', label: 'Converted' },
   { value: 'not_interested', label: 'Not interested' },
 ];
 
-const STATUSES = ['new', 'contacted', 'follow_up', 'potential', 'not_interested', 'converted'];
+const STATUSES = ['new', 'contacted', 'follow_up', 'might_return', 'potential', 'not_interested', 'converted'];
 
 // value -> label, for rendering a lead's logged activities as readable history.
 const METHOD_LABEL = Object.fromEntries(METHODS.map((m) => [m.value, m.label]));
@@ -342,11 +346,21 @@ export function Leads() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [range, setRange] = useState('7d');
 
-  const [showFinder, setShowFinder] = useState(false);
+  // Read once, before the state that seeds off it.
+  //
+  // Initialisers rather than a restore effect: an effect that setResults()es on mount
+  // races the effect that persists them, and the empty first render wins -- wiping the
+  // saved results before the restore lands.
+  const restored = useMemo(() => readSavedResults(localStorage), []);
+
+  // Opens itself when there is something in it. The results table lives inside this panel,
+  // so restoring the array without this leaves them just as invisible as losing them.
+  const [showFinder, setShowFinder] = useState(restored.results.length > 0);
   const [finder, setFinder] = useState({ location: '', industry: '', maxResults: '20', radius: '10000' });
   const [coords, setCoords] = useState(null); // { latitude, longitude } once located
   const [locating, setLocating] = useState(false);
-  const [results, setResults] = useState([]);
+  const [results, setResults] = useState(restored.results);
+  const [searchedAt, setSearchedAt] = useState(restored.at);
   const [searching, setSearching] = useState(false);
   // A search result awaiting its first logged call -- not yet written to the database.
   const [pendingResult, setPendingResult] = useState(null);
@@ -502,6 +516,12 @@ export function Leads() {
     });
   }, [results, resultFilters]);
 
+  // One writer for every setResults call site, so results saved after a search and results
+  // updated when a call is logged against one are persisted the same way.
+  useEffect(() => {
+    saveResults(localStorage, { at: searchedAt, results });
+  }, [results, searchedAt]);
+
   // Live "this is already a lead" hint for the manual log modal, recomputed as you type.
   const manualMatch = useMemo(
     () => (activityLead?.manual ? findLeadMatch(leadRows, activityForm.name || '', activityForm.phone || '') : null),
@@ -565,6 +585,7 @@ export function Leads() {
       });
       if (after) setUsage(after);
       setResults(found);
+      setSearchedAt(new Date().toISOString());
       if (logFailed) {
         toast.error("Searches aren't being logged — your monthly spend cap is not enforced.");
       } else if (found.length === 0) {
@@ -825,7 +846,7 @@ export function Leads() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-semibold text-text-h">
           Leads{' '}
           {loading ? (
@@ -834,7 +855,7 @@ export function Leads() {
             <span className="text-sm font-normal text-text/70">({leadRows.length} total)</span>
           )}
         </h2>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => setShowCategories(true)}>
             Categories
           </Button>
@@ -1030,6 +1051,20 @@ export function Leads() {
                 <span className="text-text/50">
                   Showing {visibleResults.length} of {results.length}
                 </span>
+                {/* Age, not an expiry. These cost money to fetch, so they are kept until
+                    you replace or clear them -- but a week-old list silently reappearing
+                    would mislead, so it says how old it is. */}
+                {searchedAt && <span className="text-text/50">· found {freshnessLabel(searchedAt)}</span>}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setResults([]);
+                    setSearchedAt(null);
+                  }}
+                  className="text-text/50 underline underline-offset-2 hover:text-text"
+                >
+                  Clear
+                </button>
               </div>
 
               <Table>
@@ -1100,7 +1135,7 @@ export function Leads() {
       )}
 
       <Card>
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-text-h">Contacts per day</h3>
           <Select value={range} onValueChange={setRange} className="w-36">
             <SelectItem value="7d">Last 7 days</SelectItem>
@@ -1467,7 +1502,7 @@ export function Leads() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs text-text/70">Counting from</label>
                 <Input

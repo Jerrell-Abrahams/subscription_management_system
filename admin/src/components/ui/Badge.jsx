@@ -27,6 +27,7 @@ const TONE = {
   new: 'neutral',
   contacted: 'warn',
   follow_up: 'warn',
+  might_return: 'warn',
   potential: 'ok',
   not_interested: 'neutral',
   converted: 'ok',

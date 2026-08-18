@@ -7,6 +7,9 @@ import { cn } from './cn';
 // ratios are a per-screen concern and belong on the <Th>, not in here.
 export function Table({ className, ...props }) {
   return (
+    // ponytail: on a phone these scroll sideways rather than reflowing into per-row cards.
+    // Ceiling is column count -- Leads and Finance are the widest. Build the card view when
+    // one of those is genuinely unusable on a phone, not before.
     <div className="overflow-x-auto rounded-lg border border-border bg-panel">
       <table className={cn('w-full border-collapse text-[13px]', className)} {...props} />
     </div>

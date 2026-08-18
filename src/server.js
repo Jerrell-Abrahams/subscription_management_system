@@ -10,12 +10,20 @@ const analyticsRoutes = require('./routes/analytics');
 const updatesRoutes = require('./routes/updates');
 const adminRoutes = require('./routes/admin');
 const invoiceRoutes = require('./routes/invoices');
+const documentRoutes = require('./routes/documents');
 const leadsRoutes = require('./routes/leads');
 const { router: financeRoutes, syncPayfast, NIGHTLY_DAYS, daysAgo } = require('./routes/finance');
 const dailySubscriptionCheck = require('./jobs/dailySubscriptionCheck');
 
 const app = express();
-app.use(cors({ origin: (process.env.ADMIN_ORIGIN || 'http://localhost:5173').split(',') }));
+// Content-Disposition is exposed because the documents route streams a PDF back for the
+// browser to save, and the admin console reads the filename off that header.
+app.use(
+  cors({
+    origin: (process.env.ADMIN_ORIGIN || 'http://localhost:5173').split(','),
+    exposedHeaders: ['Content-Disposition'],
+  })
+);
 app.use(express.json());
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
@@ -40,9 +48,11 @@ app.use('/api/site', cors({ origin: '*' }), rateLimit({ windowMs: 60 * 1000, lim
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/updates', updatesRoutes);
 // Ahead of adminRoutes: both mounts match /api/admin/invoices, and registering the
-// broader one first would run adminAuth twice on every invoice request. Same for finance.
+// broader one first would run adminAuth twice on every invoice request. Same for
+// finance and documents.
 app.use('/api/admin/invoices', invoiceRoutes);
 app.use('/api/admin/finance', financeRoutes);
+app.use('/api/admin/documents', documentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/leads', leadsRoutes);
 

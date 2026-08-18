@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Plus, Send, Check, Ban, Download, Pencil } from 'lucide-react';
 import { supabase } from '../supabaseClient';
@@ -16,17 +17,23 @@ import { Table, Thead, Tbody, Tr, Th, Td } from './ui/Table';
 import { Skeleton, SkeletonRows } from './ui/Skeleton';
 import { StatusBadge } from './ui/Badge';
 import { Field, Input } from './ui/Input';
+import { Select, SelectItem } from './ui/Select';
 import { Modal } from './ui/Modal';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { money, day, today } from '../lib/format';
+import { matchesFilter, isOverdue } from '../lib/invoices';
 
 // The invoice keeps its identity once numbered; a paid one just gains a second document.
 const docNumber = (i) => (i.number == null ? 'Draft' : `INV-${String(i.number).padStart(4, '0')}`);
 
+// With a subscriptionId this is the card on the subscription page. Without one it is the
+// whole book, and grows a customer column, a status filter and no "New invoice" button --
+// a draft has to belong to a subscription, so it starts from that subscription's page.
 export function InvoicesCard({ subscriptionId }) {
   // null = not loaded, [] = loaded and empty. This card used to explain how automatic
   // invoicing works while the query was still running, which reads as "there are none".
   const [invoices, setInvoices] = useState(null);
+  const [filter, setFilter] = useState('outstanding');
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(null);
   const [paying, setPaying] = useState(null);
@@ -34,11 +41,13 @@ export function InvoicesCard({ subscriptionId }) {
   const [sending, setSending] = useState(null);
 
   async function load() {
-    const { data } = await supabase
+    // The join is only asked for in book mode; on a subscription page the customer is the
+    // heading two cards up.
+    const query = supabase
       .from('invoices')
-      .select('*')
-      .eq('subscription_id', subscriptionId)
+      .select(subscriptionId ? '*' : '*, subscriptions(app_users(email), products(name))')
       .order('created_at', { ascending: false });
+    const { data } = await (subscriptionId ? query.eq('subscription_id', subscriptionId) : query);
     setInvoices(data || []);
   }
 
@@ -46,6 +55,11 @@ export function InvoicesCard({ subscriptionId }) {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subscriptionId]);
+
+  // Filtering in memory, not in the query: the whole book is a few hundred rows at most
+  // and this way switching filters is instant and costs no round trip.
+  // ponytail: move the filter into the query if this ever passes a few thousand invoices.
+  const shown = invoices && !subscriptionId ? invoices.filter((i) => matchesFilter(i, filter)) : invoices;
 
   // Every action shares this: run it, surface the error, reload. Individually they'd be
   // six copies of the same try/catch.
@@ -82,37 +96,65 @@ export function InvoicesCard({ subscriptionId }) {
 
   return (
     <Card>
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="flex items-center gap-1.5 text-sm font-semibold text-text-h">
-          Invoices
-          {invoices === null ? <Skeleton className="h-3 w-6" /> : `(${invoices.length})`}
-        </h3>
-        <Button
-          variant="secondary"
-          disabled={busy}
-          onClick={() => act(() => createInvoice({ subscriptionId }), 'Draft invoice created.')}
-        >
-          <Plus size={15} /> New invoice
-        </Button>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        {subscriptionId ? (
+          <h3 className="flex items-center gap-1.5 text-sm font-semibold text-text-h">
+            Invoices
+            {invoices === null ? <Skeleton className="h-3 w-6" /> : `(${invoices.length})`}
+          </h3>
+        ) : (
+          <Select value={filter} onValueChange={setFilter} className="w-44">
+            <SelectItem value="outstanding">Outstanding</SelectItem>
+            <SelectItem value="paid">Paid</SelectItem>
+            <SelectItem value="void">Void</SelectItem>
+            <SelectItem value="all">All</SelectItem>
+          </Select>
+        )}
+        {subscriptionId ? (
+          <Button
+            variant="secondary"
+            disabled={busy}
+            onClick={() => act(() => createInvoice({ subscriptionId }), 'Draft invoice created.')}
+          >
+            <Plus size={15} /> New invoice
+          </Button>
+        ) : (
+          <span className="text-[12.5px] text-dim">
+            {shown === null ? '' : `${shown.length} invoice${shown.length === 1 ? '' : 's'}`}
+          </span>
+        )}
       </div>
 
-      {invoices?.length === 0 ? (
+      {shown?.length === 0 ? (
         <p className="text-sm text-text/60">
-          No invoices yet. One is drafted automatically 7 days before this subscription's period ends,
-          or create one now.
+          {subscriptionId
+            ? "No invoices yet. One is drafted automatically 7 days before this subscription's period ends, or create one now."
+            : 'Nothing here. Drafts start from a subscription — open one and use New invoice.'}
         </p>
       ) : (
         <Table>
           <Thead>
-            <Tr><Th>Number</Th><Th>Period</Th><Th>Amount</Th><Th>Due</Th><Th>Status</Th><Th></Th></Tr>
+            <Tr>
+              <Th>Number</Th>
+              {!subscriptionId && <Th>Customer</Th>}
+              <Th>Period</Th><Th>Amount</Th><Th>Due</Th><Th>Status</Th><Th></Th>
+            </Tr>
           </Thead>
           <Tbody>
-            {invoices === null && <SkeletonRows cols={6} rows={3} actions />}
-            {invoices?.map((i) => {
-              const overdue = i.status === 'sent' && i.due_date < today();
+            {shown === null && <SkeletonRows cols={subscriptionId ? 6 : 7} rows={3} actions />}
+            {shown?.map((i) => {
+              const overdue = isOverdue(i, today());
               return (
                 <Tr key={i.id}>
                   <Td className="font-mono text-xs">{docNumber(i)}</Td>
+                  {!subscriptionId && (
+                    <Td>
+                      <Link to={`/subscriptions/${i.subscription_id}`} className="text-accent hover:underline">
+                        {i.subscriptions?.app_users?.email || '—'}
+                      </Link>
+                      <span className="block text-xs text-dim">{i.subscriptions?.products?.name}</span>
+                    </Td>
+                  )}
                   <Td className="text-xs">{day(i.period_start)} – {day(i.period_end)}</Td>
                   <Td>{money(i.amount)}</Td>
                   <Td className={overdue ? 'font-medium text-red-600 dark:text-red-400' : undefined}>

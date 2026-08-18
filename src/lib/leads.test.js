@@ -20,6 +20,7 @@ test('maps each outcome to the status it should leave the lead in', () => {
   assert.strictEqual(statusForOutcome('no_answer'), 'contacted');
   assert.strictEqual(statusForOutcome('not_interested'), 'not_interested');
   assert.strictEqual(statusForOutcome('follow_up'), 'follow_up');
+  assert.strictEqual(statusForOutcome('might_return'), 'might_return');
   assert.strictEqual(statusForOutcome('potential'), 'potential');
   assert.strictEqual(statusForOutcome('converted'), 'converted');
 });

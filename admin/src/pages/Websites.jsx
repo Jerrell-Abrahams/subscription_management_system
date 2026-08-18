@@ -218,7 +218,7 @@ export function Websites() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-semibold text-text-h">
           Websites{' '}
           {loading ? (
@@ -473,7 +473,7 @@ export function Websites() {
             label="Owner"
             hint={
               form.isNewUser
-                ? 'Creating a customer here also sends them their login, the same as Add user does.'
+                ? 'Nothing is emailed — note the password below and send it to them yourself.'
                 : 'The customer this site is billed to.'
             }
           >

@@ -29,7 +29,7 @@ export function Select({ value, onValueChange, placeholder, children, className,
             'data-[state=open]:animate-menu-in data-[state=closed]:animate-menu-out'
           )}
         >
-          <RadixSelect.Viewport className="p-1">{children}</RadixSelect.Viewport>
+          <RadixSelect.Viewport className="max-h-[var(--radix-select-content-available-height)] p-1">{children}</RadixSelect.Viewport>
         </RadixSelect.Content>
       </RadixSelect.Portal>
     </RadixSelect.Root>

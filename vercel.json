@@ -2,8 +2,8 @@
   "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }],
   "functions": {
     "api/index.js": {
-      "includeFiles": "assets/**"
+      "includeFiles": "{assets,src/documents/templates}/**"
     }
   },
-  "crons": [{ "path": "/api/cron/expire-subscriptions", "schedule": "0 0 * * *" }]
+  "crons": [{ "path": "/api/cron/expire-subscriptions", "schedule": "0 4 * * *" }]
 }

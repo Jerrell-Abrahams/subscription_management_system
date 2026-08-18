@@ -42,7 +42,7 @@ export function Login() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg p-12 text-text">
+    <div className="flex min-h-screen items-center justify-center bg-bg p-6 text-text sm:p-12">
       <div className="flex w-full max-w-[340px] flex-col gap-7">
         <Logo className="h-[64px] self-center" />
 

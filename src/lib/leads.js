@@ -14,6 +14,11 @@ const STATUS_FOR_OUTCOME = {
   no_answer: 'contacted',
   not_interested: 'not_interested',
   follow_up: 'follow_up',
+  // Distinct from follow_up: that one is a date you committed to, and it needs a
+  // follow_up_date. This one is the prospect saying they will come back to you, so there
+  // is no date to hold you to -- but it still needs its own status, because the leads list
+  // filters by status and a soft maybe is worth finding again.
+  might_return: 'might_return',
   potential: 'potential',
   converted: 'converted',
 };

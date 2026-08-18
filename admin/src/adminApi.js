@@ -155,3 +155,25 @@ export function createLeadCategory(name) {
 export function deleteLeadCategory(name) {
   return authedFetch(`/api/leads/categories/${encodeURIComponent(name)}`, { method: 'DELETE' });
 }
+
+// Client documents. The catalogue drives the form; the PDF comes back as a download rather
+// than a stored file, so there is no id to fetch it by later -- generate it again if needed.
+export function listDocumentTemplates() {
+  return authedFetch('/api/admin/documents');
+}
+
+// Not authedFetch: that helper always parses JSON, and this response is a PDF.
+export async function generateDocument(slug, body) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch(`${API_BASE_URL}/api/admin/documents/${slug}/pdf`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Could not generate the document');
+  }
+  const match = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '');
+  return { blob: await res.blob(), filename: match ? match[1] : `${slug}.pdf` };
+}

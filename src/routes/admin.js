@@ -3,7 +3,6 @@ const supabase = require('../config/supabase');
 const adminAuth = require('../middleware/adminAuth');
 const { nextPeriodEnd } = require('../lib/renewal');
 const { normalizeDomain } = require('../lib/websiteAccess');
-const { sendOnboardingEmail } = require('../lib/email');
 
 const router = express.Router();
 router.use(adminAuth);
@@ -41,14 +40,10 @@ router.post('/users', async (req, res) => {
     return res.status(500).json({ error: profileError.message });
   }
 
-  // Best-effort - the account is already created and the admin already has
-  // the password on screen, so a flaky email provider shouldn't fail this request.
-  try {
-    await sendOnboardingEmail({ email, password, fullName });
-  } catch (emailError) {
-    console.error('[admin] failed to send onboarding email:', emailError.message);
-  }
-
+  // No welcome email: the sending domain isn't verified, so this used to fail into a
+  // console nobody reads and every customer's login quietly never arrived. The password is
+  // on the admin's screen at this point -- it goes to the customer the same way the sale
+  // did, by hand.
   res.status(201).json(profile);
 });
 
