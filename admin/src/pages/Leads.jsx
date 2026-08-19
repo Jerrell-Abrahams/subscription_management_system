@@ -1167,7 +1167,7 @@ export function Leads() {
           </h3>
           <Table>
             <Thead>
-              <Tr><Th>Business</Th><Th>Phone</Th><Th>Category</Th><Th>Due</Th><Th></Th></Tr>
+              <Tr><Th>Business</Th><Th>Phone</Th><Th>Category</Th><Th>Due</Th><Th>Last note</Th><Th></Th></Tr>
             </Thead>
             <Tbody>
               {followUps.map((l) => (
@@ -1177,6 +1177,11 @@ export function Leads() {
                   <Td>{l.category || '—'}</Td>
                   <Td className={l.follow_up_date < todayStr() ? 'text-red-600 dark:text-red-400' : ''}>
                     {l.follow_up_date}
+                  </Td>
+                  {/* First line only -- the API prepends each note date-stamped, so line one is
+                      the latest. Hover for the whole history rather than growing the row. */}
+                  <Td className="max-w-xs truncate text-text/70" title={l.notes || undefined}>
+                    {l.notes?.split('\n')[0] || '—'}
                   </Td>
                   <Td>
                     <Button variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => openActivity(l)}>
