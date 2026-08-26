@@ -22,11 +22,16 @@ const {
   rect,
   hrule,
   drawLogo,
+  drawSvg,
+  svgBox,
   toBuffer,
+  SIGNATURE,
 } = require('./pdfBase');
-const { bySlug, documentBlocks } = require('../documents');
+const { bySlug, documentBlocks, withRef } = require('../documents');
 const { plain } = require('../documents/markdown');
-const { display } = require('../documents/variables');
+const { display, VARIABLES } = require('../documents/variables');
+const { formatDate } = require('./invoices');
+const { sastNow } = require('./sast');
 
 // Renders a client document (agreement, schedule, SOW, change request, DPA) from the block
 // list produced by src/documents. Shares its fonts, colours and logo with the invoice
@@ -311,26 +316,80 @@ function callout(doc, block) {
   moveTo(doc, top + h);
 }
 
+// What each side's signature block shows: a pre-printed value where we already know the
+// answer, and an empty string where a rule is left for a pen.
+//
+// Both names are pre-printed: ours is the same on every document, and theirs is already
+// stated in the party table on page one, so making them write it again is friction with
+// no legal gain. Their DATE stays blank -- it is whenever they actually sign, which is not
+// knowable when the PDF is made. Signature is blank on both sides for obvious reasons.
+//
+// Pure and exported so the decision is testable without parsing a PDF, the same way
+// columnWidths and repeatHeader are.
+const signatureRows = (meta = {}) => [
+  { label: 'Name', ours: meta.signatory || '', theirs: meta.clientSignatory || '' },
+  { label: 'Signature', ours: '', theirs: '' },
+  { label: 'Date', ours: meta.signedOn || '', theirs: '' },
+];
+
+// Your signature, committed as assets/signature.svg -- the same treatment as the logo it
+// sits next to in this same block. It is not a secret the way an API key is: it is already
+// on every contract this system emails a client, so keeping it out of production is not
+// protecting anything, and an env var only bought a deploy-time footgun (skip the Vercel
+// step and every contract quietly ships with a blank line). Read per render, like the logo,
+// so replacing the file takes effect on the next document with no restart.
+// Same shape check drawSvg needs to do anything useful. A hand-edited or corrupted asset
+// file is treated as absent rather than crashing the one thing standing between you and a
+// signed PDF. Exported and pure so the guard is testable without writing to the real file.
+const looksLikeSvg = (text) => typeof text === 'string' && text.includes('<path') && /viewBox="/.test(text);
+
+const signatureSvg = () => {
+  if (!fs.existsSync(SIGNATURE)) return null;
+  const svg = fs.readFileSync(SIGNATURE, 'utf8');
+  return looksLikeSvg(svg) ? svg : null;
+};
+
+// How tall a drawn signature may be. The rule sits 26 below its label, so this leaves the
+// ink just clear of both.
+const SIGNATURE_H = 22;
+
 // Ruled fields rather than blank space: someone has to sign this with a pen.
 function signature(doc, meta) {
   const COL_W = (CONTENT_W - 40) / 2;
-  const FIELDS = ['Name', 'Signature', 'Date', 'Capacity'];
+  const rows = signatureRows(meta);
+  const ink = signatureSvg();
   const STEP = 46;
-  const h = 20 + 14 * 1.2 + 14 + FIELDS.length * STEP;
+  const h = 20 + 14 * 1.2 + 14 + rows.length * STEP;
   if (remaining(doc) < h) breakPage(doc);
 
   const top = cursor(doc);
   const columns = [
-    { x: LEFT, heading: 'For ' + (meta.businessName || 'Complex AI') },
-    { x: LEFT + COL_W + 40, heading: 'For the Client' },
+    { x: LEFT, heading: 'For ' + (meta.businessName || 'Complex AI'), side: 'ours' },
+    { x: LEFT + COL_W + 40, heading: 'For the Client', side: 'theirs' },
   ];
 
   for (const col of columns) {
     text(doc, col.heading, col.x, top, { font: 'displaySemi', size: 12, tracking: 0.16, color: INK_STRONG });
     hrule(doc, col.x, col.x + COL_W, top + 18, GOLD);
     let y = top + 40;
-    for (const field of FIELDS) {
-      text(doc, field, col.x, y, { size: 11.5, color: MUTED });
+    for (const row of rows) {
+      text(doc, row.label, col.x, y, { size: 11.5, color: MUTED });
+      // Right-aligned against the same rule, like the invoice's label/amount pairs -- the
+      // label keeps the left edge, so a filled line cannot collide with its own caption.
+      if (row[col.side]) rightText(doc, row[col.side], col.x + COL_W, y, { size: 12, color: INK });
+      // Sits on the rule a pen would have used, and only ever on our side. Sized by height
+      // first so any signature fits the row, then capped on width so a wide one cannot run
+      // into the label. Wrapped because malformed path data makes pdfkit throw: a mistyped
+      // env var must cost a ruled blank on one line, not every document the console makes.
+      if (ink && col.side === 'ours' && row.label === 'Signature') {
+        try {
+          const { aspect } = svgBox(ink);
+          const w = Math.min(COL_W * 0.62, SIGNATURE_H * aspect);
+          drawSvg(doc, ink, col.x + COL_W - w, y + 24 - w / aspect, w, INK);
+        } catch {
+          // falls through to the ruled blank below
+        }
+      }
       hrule(doc, col.x, col.x + COL_W, y + 26, HAIRLINE);
       y += STEP;
     }
@@ -360,9 +419,13 @@ function footers(doc, template, meta) {
 // async so that a bad slug and a broken render both surface the same way -- as a rejection.
 // A function that sometimes throws synchronously and sometimes rejects is a trap for the
 // route handler calling it.
-async function renderDocumentPdf({ slug, values = {}, settings = {}, reviewNotes = true }) {
+async function renderDocumentPdf({ slug, values: given = {}, settings = {}, reviewNotes = true }) {
   const template = bySlug(slug);
   if (!template) throw new Error(`Unknown document template: ${slug}`);
+
+  // Resolved once here rather than inside documentBlocks, so the header meta block and the
+  // {{DOCUMENT_REF}} in the clause text are guaranteed to be the same string.
+  const values = withRef(slug, given);
 
   const doc = new PDFDocument({
     size: 'A4',
@@ -379,6 +442,18 @@ async function renderDocumentPdf({ slug, values = {}, settings = {}, reviewNotes
     // header prints the raw 2026-09-01 from the date input while the body prints 1 Sept
     // 2026, and the contract states its own effective date two ways on page one.
     effective: values.EFFECTIVE_DATE ? display('EFFECTIVE_DATE', values.EFFECTIVE_DATE) : '',
+    // Pre-printed into the signature block. Read from the same registry entry the form
+    // defaults from, so the name lives in one place -- and still overridable per document
+    // on the templates that ask for it.
+    signatory: values.COMPANY_REPRESENTATIVE || VARIABLES.COMPANY_REPRESENTATIVE.default,
+    // The day the document was prepared. The client's date stays blank: they sign when
+    // they sign, and parties signing on different dates is normal.
+    // Already named in the party table on page one, so printing it again here costs
+    // nothing and saves them writing it. Blank if you have not filled the field in.
+    clientSignatory: values.CLIENT_REPRESENTATIVE || '',
+    // sastNow(), not new Date(): a document prepared between 22:00-23:59 UTC (00:00-01:59
+    // SAST) must print the SAST calendar date, not the server's UTC one.
+    signedOn: formatDate(sastNow()),
   };
 
   header(doc, template, meta);
@@ -430,4 +505,4 @@ async function renderDocumentPdf({ slug, values = {}, settings = {}, reviewNotes
   return toBuffer(doc);
 }
 
-module.exports = { renderDocumentPdf, columnWidths, columnXs, repeatHeader };
+module.exports = { renderDocumentPdf, columnWidths, columnXs, repeatHeader, signatureRows, looksLikeSvg };

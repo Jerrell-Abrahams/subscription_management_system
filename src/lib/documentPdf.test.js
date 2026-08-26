@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const zlib = require('zlib');
-const { renderDocumentPdf, columnWidths, columnXs, repeatHeader } = require('./documentPdf');
+const { renderDocumentPdf, columnWidths, columnXs, repeatHeader, signatureRows, looksLikeSvg } = require('./documentPdf');
 const { renderInvoicePdf } = require('./invoicePdf');
 const { TEMPLATES } = require('../documents');
 const { display } = require('../documents/variables');
@@ -173,4 +173,41 @@ test('the invoice renderer still works on the shared pdf base', async () => {
     assert.strictEqual(buf.slice(0, 4).toString(), '%PDF');
     assert.strictEqual(pageCount(buf), 1, 'an invoice must stay on one page');
   }
+});
+
+test('both names are pre-printed; only their date is left blank', () => {
+  const rows = signatureRows({ signatory: 'Jerrell Abrahams', signedOn: '24 Aug 2026', clientSignatory: 'Nadia Isaacs' });
+  const row = (label) => rows.find((r) => r.label === label);
+
+  assert.deepEqual(rows.map((r) => r.label), ['Name', 'Signature', 'Date'], 'Capacity was removed');
+  assert.deepEqual([row('Name').ours, row('Name').theirs], ['Jerrell Abrahams', 'Nadia Isaacs']);
+  assert.equal(row('Date').ours, '24 Aug 2026');
+  // Their date is whenever they actually sign. Printing one we guessed would state when
+  // they agreed, which is not knowable at render time.
+  assert.equal(row('Date').theirs, '', 'their date stays ruled');
+  // Nobody's signature is ever pre-printed as text.
+  assert.deepEqual([row('Signature').ours, row('Signature').theirs], ['', '']);
+});
+
+test('the signature block falls back to ruled blanks when nothing is known', () => {
+  assert.deepEqual(signatureRows().filter((r) => r.ours || r.theirs), []);
+});
+
+test('a malformed signature file is treated as absent, not thrown', () => {
+  // assets/signature.svg is a real file someone edits by hand. A shape check that lived
+  // only inside the try/catch around doc.image() would still crash on anything the SVG
+  // path parser chokes on; this guard is what keeps a bad edit from taking the whole
+  // render down instead of just leaving the line ruled.
+  assert.equal(looksLikeSvg('not an svg'), false);
+  assert.equal(looksLikeSvg('<svg><path d="M0 0"/></svg>'), false, 'no viewBox');
+  assert.equal(looksLikeSvg('<svg viewBox="0 0 10 10"></svg>'), false, 'no path');
+  assert.equal(looksLikeSvg('<svg viewBox="0 0 10 10"><path d="M0 0"/></svg>'), true);
+});
+
+test('the committed signature, if present, does not break a render', async () => {
+  // assets/signature.svg ships with the repo (see the comment on SIGNATURE in pdfBase.js
+  // for why it is committed rather than an env var). Whatever is actually sitting there
+  // today, generating a document must still succeed.
+  const pdf = await renderDocumentPdf({ slug: 'website-agreement', values: VALUES, settings: SETTINGS, reviewNotes: false });
+  assert.ok(pdf.length > 1000, 'the document still renders');
 });

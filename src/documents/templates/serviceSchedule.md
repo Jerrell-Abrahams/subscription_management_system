@@ -76,6 +76,8 @@ The domain belongs to the Client. Where Complex AI registers or renews a domain 
 
 Where the Client is responsible for renewal, Complex AI is not liable for a service interruption caused by an expired domain.
 
+Where Complex AI is responsible for renewal, it renews the domain only while this Schedule is running and the fees under it are paid. On termination or cancellation of this Schedule, Complex AI stops renewing the domain. The Client may request a transfer within 30 days of termination, at the Client's cost and subject to all amounts owing having been paid, after which the Client renews the domain directly. Complex AI is not liable for a domain that expires after this Schedule has ended.
+
 ## 7. Maintenance
 
 Included in this Schedule:
@@ -147,7 +149,7 @@ Where no frequency is stated above, no backup commitment is given, and clause 14
 | Setup fee | {{SETUP_FEE}} | On signature of this Schedule |
 | Monthly fee | {{MONTHLY_FEE}} | {{BILLING_FREQUENCY}} |
 | Annual fee | {{ANNUAL_FEE}} | Annually in advance, where an annual term applies |
-| Additional work | {{HOURLY_RATE}} | On completion, after an approved Change Request |
+| Additional work | {{HOURLY_RATE}} per hour | On completion, after an approved Change Request |
 
 Third-party costs not included in the fees above:
 

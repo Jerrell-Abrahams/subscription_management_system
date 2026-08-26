@@ -43,7 +43,7 @@ const section = (title, href, rows) =>
  *
  * `today` is a parameter, not a call to new Date(), so the day-counting is testable.
  */
-function digest({ overdue = [], expiring = [], wentDark = [], followUps = [], errors = [], today }) {
+function digest({ overdue = [], expiring = [], wentDark = [], followUps = [], domains = [], errors = [], today }) {
   const now = today || new Date().toLocaleDateString('sv'); // local calendar date, not UTC
 
   const body =
@@ -78,6 +78,21 @@ function digest({ overdue = [], expiring = [], wentDark = [], followUps = [], er
       '/leads',
       followUps.map((l) => `${esc(l.name)} — due ${formatDate(l.followUpDate)}`)
     ) +
+    // Deliberately does not say "renew this" or "cancel this" -- whether the registrar
+    // auto-renews is not something this system knows. It states the date and who is still
+    // paying, and the decision stays yours.
+    section(
+      'Domains renewing',
+      '/websites',
+      domains.map((d) => {
+        const late = days(d.renewsOn, now);
+        const when = late > 0 ? `was due ${late} day${late === 1 ? '' : 's'} ago` : `renews ${formatDate(d.renewsOn)}`;
+        const who = d.orphaned
+          ? `<span style="color:#c62828">${esc(d.customer)} is no longer paying</span>`
+          : `<span style="color:#6e6e6e">${esc(d.note)}</span>`;
+        return `<strong>${esc(d.domain)}</strong> — ${when} · ${who}`;
+      })
+    ) +
     section(
       'Errors during this run',
       '/',
@@ -92,6 +107,7 @@ function digest({ overdue = [], expiring = [], wentDark = [], followUps = [], er
     expiring.length && `${expiring.length} expiring`,
     wentDark.length && `${wentDark.length} offline`,
     followUps.length && `${followUps.length} follow-up${followUps.length === 1 ? '' : 's'}`,
+    domains.length && `${domains.length} domain${domains.length === 1 ? '' : 's'}`,
     errors.length && `${errors.length} error${errors.length === 1 ? '' : 's'}`,
   ].filter(Boolean);
 

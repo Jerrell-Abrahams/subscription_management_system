@@ -106,14 +106,22 @@ async function draftUpcomingInvoices(errors = []) {
   }
 }
 
-// The three reads the digest needs that the run doesn't already know. Failures are pushed
+// Not LEAD_DAYS. Seven days is enough to raise an invoice, and nowhere near enough to
+// reach a client who has gone quiet, agree a handover and get a domain moved between
+// registrars -- which is the whole point of knowing about this one early.
+const DOMAIN_LEAD_DAYS = 30;
+
+// The four reads the digest needs that the run doesn't already know. Failures are pushed
 // into `errors` rather than thrown: a broken leads query must not cost you the overdue
 // invoice list in the same email.
 async function collectDigest(errors) {
   const today = new Date().toLocaleDateString('sv'); // local calendar date, as in format.js
   const horizon = new Date(Date.now() + LEAD_DAYS * 86400000).toISOString();
+  // Date, not timestamp: domain_renews_on is a `date` column, so comparing it against an
+  // ISO timestamp makes postgres cast one side and quietly shifts the boundary by a day.
+  const domainHorizon = new Date(Date.now() + DOMAIN_LEAD_DAYS * 86400000).toLocaleDateString('sv');
 
-  const [invoices, expiring, leads] = await Promise.all([
+  const [invoices, expiring, leads, domains] = await Promise.all([
     supabase
       .from('invoices')
       .select('number, amount, due_date, subscriptions(app_users(email, full_name, company_name))')
@@ -136,9 +144,23 @@ async function collectDigest(errors) {
       .eq('status', 'follow_up')
       .lte('follow_up_date', today)
       .order('follow_up_date'),
+    // No lower bound on purpose. A date already in the past means the renewal came and
+    // you never said what happened, so the row keeps appearing until you either move the
+    // date on or clear it -- an alert that ages out on its own is one you stop reading.
+    supabase
+      .from('websites')
+      .select('domain, kind, domain_renews_on, subscriptions(status, app_users(email, full_name, company_name))')
+      .not('domain_renews_on', 'is', null)
+      .lte('domain_renews_on', domainHorizon)
+      .order('domain_renews_on'),
   ]);
 
-  for (const [label, result] of [['overdue invoices', invoices], ['expiring subscriptions', expiring], ['lead follow-ups', leads]]) {
+  for (const [label, result] of [
+    ['overdue invoices', invoices],
+    ['expiring subscriptions', expiring],
+    ['lead follow-ups', leads],
+    ['domain renewals', domains],
+  ]) {
     if (result.error) errors.push(`Could not read ${label}: ${result.error.message}`);
   }
 
@@ -152,6 +174,31 @@ async function collectDigest(errors) {
     })),
     expiring: (expiring.data || []).map(describe),
     followUps: (leads.data || []).map((l) => ({ name: l.name, followUpDate: l.follow_up_date })),
+    // Read the other way round to `describe` above: this query starts at websites, and
+    // websites.subscription_id is to-one, so `subscriptions` is an object here, not an array.
+    domains: (domains.data || []).map((w) => {
+      const kind = w.kind || 'client';
+      const status = w.subscriptions?.status;
+      return {
+        domain: w.domain,
+        renewsOn: w.domain_renews_on,
+        // A demo or internal domain has no subscription by design, so its kind is the only
+        // thing worth saying about it. For a client site the subscription status is the
+        // whole decision: still paying means let it renew.
+        //
+        // websites_client_needs_subscription (src/db/website_kinds.sql) means a client row
+        // always has one, so the fallback is unreachable today -- kept because the cost of
+        // being wrong is the word "undefined" in an email, and the constraint is one
+        // migration away from changing.
+        note: kind === 'client' ? status || 'no subscription' : kind,
+        // The money leak: you are still paying for a domain the customer STOPPED paying
+        // for. 'pending' is excluded on purpose -- that's a sale that hasn't closed yet,
+        // not a lapsed one, and flagging it here would accuse a brand-new client of having
+        // already stopped paying before their first invoice was even settled.
+        orphaned: kind === 'client' && status !== 'active' && status !== 'pending',
+        customer: kind === 'client' ? customerName(w.subscriptions?.app_users) : null,
+      };
+    }),
   };
 }
 

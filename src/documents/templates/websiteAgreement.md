@@ -21,7 +21,7 @@ This is the whole agreement for this website. It replaces anything discussed bef
 
 Deliverables:
 
-{{DELIVERABLES}}
+{{WEBSITE_DELIVERABLES}}
 
 ## 3. What is not included
 
@@ -33,7 +33,7 @@ Unless clause 2 says otherwise, the price does not include:
 - Photography, video or custom illustration
 - Logo or brand design
 - Loading your products, stock or customer data
-- Search engine optimisation, Google Ads or social media management
+- Ongoing search engine optimisation, Google Ads or social media management
 - Paid plugins, stock images, fonts or third-party subscriptions
 - Email hosting or mailboxes
 - Changes to the design after you have approved it
@@ -52,8 +52,6 @@ I cannot build without these, and the date in clause 6 assumes I have them:
 
 **Your material must be yours to use.** If you send me photos, text or a logo you do not own or have permission for, and the owner complains, that is your responsibility, not mine. I do not check this and cannot.
 
-If you are late getting me something, the delivery date moves by the same amount of time. I am not in breach because I am waiting for you.
-
 ## 5. Price and payment
 
 | | |
@@ -61,7 +59,7 @@ If you are late getting me something, the delivery date moves by the same amount
 | Total price | {{PROJECT_FEE}} |
 | Deposit, before I start | {{DEPOSIT_AMOUNT}} |
 | Balance, on completion | The rest of the total price |
-| Extra work, if you ask for it | {{HOURLY_RATE}} |
+| Extra work, if you ask for it | {{HOURLY_RATE}} per hour |
 
 All amounts are in South African Rand. I am not currently a registered VAT vendor, so no VAT is charged. If that changes I will tell you in writing before it affects any invoice.
 
@@ -90,7 +88,7 @@ A **change** is fixing or adjusting something we already agreed: wrong wording, 
 
 **New work** is anything else — an extra page, a new feature, a different design direction, or something that comes up for the first time after signing. New work is not a revision, however small it looks.
 
-For new work I will tell you what it costs and what it does to the date, in writing, before I start. **I will not do it, and you will not be charged for it, until you say yes.** That protects both of us: I do not work for free, and you never get an invoice for something you did not agree to.
+For new work I will tell you what it costs and what it does to the date, in writing, before I start. **I will not do it, and you will not be charged for it, until you say yes.**
 
 ## 8. Sign-off
 
@@ -111,6 +109,8 @@ After sign-off, fixing something that was always broken is still on me — see c
 
 **The domain is yours.** If I register or renew it for you, I do that on your behalf and in your interest. If you ever want it moved to your own account, I will help you move it — you cover whatever the registrar charges, and any outstanding invoices need to be settled first. I will not hold your domain hostage.
 
+**While you are paying monthly, I pay the renewal.** It is part of your fee, not a separate bill. If the monthly service stops, the domain is still yours but I stop paying for it. Tell me within 30 days where to move it and I will transfer it across; after that you renew it yourself. If I do not hear from you I stop renewing, and the domain expires on its own — which takes the site and any email on it down with it. Getting an expired domain back is hard, and sometimes impossible.
+
 I do not own or run the hosting company. If they go down, change their prices or disappear, I will tell you and sort out an alternative, but I cannot promise their uptime and I am not liable for their failures.
 
 ## 10. After it goes live
@@ -118,36 +118,30 @@ I do not own or run the hosting company. If they go down, change their prices or
 | | |
 |---|---|
 | Monthly fee | {{MONTHLY_FEE}} |
-| Included each month | {{MAINTENANCE_LIMIT}} |
+| Maintenance / changes limit | {{MAINTENANCE_LIMIT}} |
 | Support hours | {{SUPPORT_HOURS}} |
 
 What the monthly fee covers:
 
 {{MAINTENANCE_SCOPE}}
 
-The monthly fee starts when the site goes live and is billed monthly in advance.
+The monthly fee starts when the site goes live, billed monthly in advance. Work beyond what is included is extra under clause 7 — I quote it first and wait for your yes.
 
-Work beyond what is included above is extra, and clause 7 applies — I tell you the cost first and wait for your yes.
+Either of us can stop the monthly service with written notice before the next billing period. It ends at the end of the month you have paid for — no cancellation fee, and no refund of the current month.
 
-Either of us can stop the monthly service with **{{CANCELLATION_NOTICE}}** written notice, ending at the end of a billing month. There is no cancellation penalty. Money already paid for the current month is not refunded.
+**If the monthly fee goes unpaid, your website may be taken offline** — the part people are most surprised by. You get written notice and a fair chance to pay first, and it goes back up once you have paid. I will not take a site down over an amount you are genuinely disputing.
 
-**If the monthly fee goes unpaid, your website may be taken offline.** This is worth reading twice, because it is the part people are surprised by. Before that happens you will get written notice and a fair chance to pay. I will not take a site down over an amount you are genuinely disputing. Once you have paid, the site goes back up.
-
-If you cancel, or the agreement ends, your website comes offline at the end of the last month you paid for. Ask me before then and I will give you a copy of your site's content and data in a normal, readable format, at no charge.
+When this ends, your site comes offline at the end of the last month you paid for. Ask before then and I will give you your content and data in a readable format, free of charge.
 
 ## 11. If something is broken
 
-I will build this properly and carefully, and the site will do what clause 2 says it does.
+If the site does not work the way clause 2 describes, tell me and I will fix it at no charge — whether you spot it during sign-off or long after, as long as it is a genuine fault in what I built.
 
-If something does not work the way clause 2 describes, tell me and I will fix it at no charge. That is the case whether you spot it in the sign-off period or later, as long as it is a genuine fault in what I built.
+That does not cover:
 
-What I cannot promise:
-
-- That the site will never go down. Nothing on the internet has zero downtime.
-- That software has no bugs at all. It does not exist. What I promise is to fix the ones that stop it doing its job.
-- That it will keep working if you or someone else changes the code
-- That another company's service — hosting, a plugin, a payment provider — will keep working
-- Any particular number of visitors, sales, enquiries or Google ranking. I build the site; I cannot promise what the market does with it.
+- Downtime, or a service outside my control failing — hosting, a plugin, a payment provider
+- Anything that breaks after you or someone else changes the code
+- Any particular number of visitors, sales, enquiries or search ranking
 
 ## 12. Who owns what
 
@@ -155,7 +149,7 @@ What I cannot promise:
 
 **Once you have paid in full, the website I build for you is yours to use** for your business, permanently. You can have it hosted, maintained and changed by anyone you like.
 
-**What stays mine** is the toolkit I built it with: my code, my templates, my components, my frameworks, and the systems I run behind the scenes. I reuse that across every client — it is how the price is what it is — and I go on using it for other people. Buying a website buys you the website. It does not buy the toolkit it was made with, in the same way buying a house does not buy the builder's tools.
+**What stays mine** is the toolkit I built it with: my code, my templates, my components, my frameworks, and the systems I run behind the scenes. I reuse that across every client, and go on using it for other people.
 
 If you ever need to own the underlying code outright rather than have a licence to use it, that is possible, but it has to be agreed and priced separately in writing.
 
@@ -165,18 +159,17 @@ I may show your website in my portfolio and say I built it, unless you tell me i
 
 ## 13. Responsibility and limits
 
-If I get something wrong and it costs you money, I will put it right. But there is a limit, and it is this: **what I am liable for in total is capped at the amount you have paid me under this agreement.**
+If I get something wrong and it costs you money, I will put it right — but **my total liability under this agreement is capped at what you have paid me.**
 
-I am not responsible for:
+I am not liable for:
 
 - Loss of profit, loss of business or loss of data
 - Anything caused by material or instructions you gave me
-- Another company's service failing
-- Someone else changing the site after I hand it over
-- Someone getting in because login details were shared or left insecure
+- A third-party service failing, or someone changing the site after I hand it over
+- A break-in through login details that were shared or left insecure
 - Things genuinely outside my control — loadshedding, network outages, natural disasters
 
-Nothing here limits anything that the law does not allow me to limit. That includes liability for death or injury caused by negligence, for fraud, and for gross negligence.
+Nothing here limits what the law does not allow me to limit, including death or injury caused by negligence, fraud, and gross negligence.
 
 > ATTORNEY REVIEW REQUIRED: the liability cap and the exclusions in clause 13. What may lawfully be excluded depends on whether the client is covered by the Consumer Protection Act, which turns on the client's size and turnover. Confirm what may be applied to a client of this kind, and whether any of it must be specifically pointed out or separately initialled.
 
@@ -186,9 +179,7 @@ Either of us can end this agreement if the other seriously breaks it and does no
 
 I can end it if an invoice is 30 days overdue and you have had written notice and a chance to pay.
 
-You can stop the monthly service any time under clause 10.
-
-If we stop mid-build: you pay for the work done up to that point, and I hand over what has been paid for. If you paid ahead for something I have not done, you get that back.
+You can stop the monthly service under clause 10.
 
 Clauses 4 (your material), 12 (who owns what) and 13 (limits) carry on applying after this agreement ends.
 
@@ -200,7 +191,7 @@ Where I handle personal information about your customers as part of running your
 
 ## 16. The legal bits
 
-This agreement is governed by the law of {{GOVERNING_LAW}}. If we end up in a dispute, we talk first and try to sort it out properly before anyone involves lawyers. If that genuinely fails, either of us can take it to {{COURT_JURISDICTION}}.
+This agreement is governed by the law of {{GOVERNING_LAW}}. If we end up in a dispute, we talk first and try to sort it out properly before anyone involves lawyers. If that genuinely fails, either of us can take it to court.
 
 We can both sign this electronically, and an emailed or scanned signature counts as a real one.
 

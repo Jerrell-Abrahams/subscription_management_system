@@ -1,3 +1,11 @@
+-- RETIRED 2026-08-20: the Payfast importer this was written for is deleted (the account
+-- was closed). THIS MIGRATION IS ALREADY APPLIED AND STAYS APPLIED -- do not re-run it and
+-- do not reverse it. `source`, `external_id` and the unique index below are provider-
+-- agnostic and still carry the rows Payfast imported; any future importer needs exactly
+-- these three and should reuse them rather than adding its own. The file is kept as the
+-- record of why they exist. Everything under here describes the Payfast account as it
+-- stood, and is history, not instructions.
+--
 -- Payfast import for the Finance ledger. Additive to finance.sql -- paste this into the
 -- Supabase SQL editor BEFORE deploying the code. Until it runs, every sync fails on a
 -- missing column; the rest of the Finance tab carries on working exactly as it does today,

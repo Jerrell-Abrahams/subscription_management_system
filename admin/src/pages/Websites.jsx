@@ -26,6 +26,7 @@ import { Table, Thead, Tbody, Tr, Th, Td } from '../components/ui/Table';
 import { Skeleton, SkeletonRows } from '../components/ui/Skeleton';
 import { Badge, StatusBadge } from '../components/ui/Badge';
 import { Field, Input } from '../components/ui/Input';
+import { parseLocalDate } from '../lib/format';
 import { Select, SelectItem } from '../components/ui/Select';
 
 const emptyForm = {
@@ -79,7 +80,7 @@ export function Websites() {
       supabase
         .from('websites')
         .select(
-          'id, domain, kind, created_at, subscriptions(id, user_id, status, current_period_end, billing_interval, app_users(email))'
+          'id, domain, kind, domain_renews_on, created_at, subscriptions(id, user_id, status, current_period_end, billing_interval, app_users(email))'
         )
         // kind first ('client' sorts before 'demo'/'internal'), so 20 demos imported on the
         // same day can't bury the handful of rows that are actually paying.
@@ -161,7 +162,11 @@ export function Websites() {
           currentPeriodEnd: editing.periodEnd,
         });
       }
-      await updateWebsite(editing.id, { domain: editing.domain.trim(), kind: editing.kind });
+      await updateWebsite(editing.id, {
+        domain: editing.domain.trim(),
+        kind: editing.kind,
+        domainRenewsOn: editing.domainRenewsOn,
+      });
       toast.success('Website updated.');
       setEditing(null);
       load();
@@ -264,11 +269,12 @@ export function Websites() {
             <Th>Status</Th>
             <Th>Billing</Th>
             <Th>Period end</Th>
+            <Th>Domain renews</Th>
             <Th>Actions</Th>
           </Tr>
         </Thead>
         <Tbody>
-          {loading && <SkeletonRows cols={7} actions />}
+          {loading && <SkeletonRows cols={8} actions />}
           {filtered.map((w) => {
             const sub = w.subscriptions;
             const isLive = sub?.status === 'active';
@@ -292,6 +298,13 @@ export function Websites() {
                 <Td>{sub ? <StatusBadge status={sub.status} /> : na}</Td>
                 <Td>{isClient ? sub?.billing_interval : na}</Td>
                 <Td>{sub ? new Date(sub.current_period_end).toLocaleDateString() : na}</Td>
+                <Td>
+                  {w.domain_renews_on ? (
+                    parseLocalDate(w.domain_renews_on).toLocaleDateString()
+                  ) : (
+                    <span className="text-dim">not tracked</span>
+                  )}
+                </Td>
                 <Td>
                   <div className="flex justify-end">
                     <DropdownMenu>
@@ -329,6 +342,7 @@ export function Websites() {
                               billingInterval: sub?.billing_interval || 'monthly',
                               // <input type="date"> only accepts YYYY-MM-DD, never an ISO timestamp.
                               periodEnd: sub?.current_period_end?.slice(0, 10) || '',
+                              domainRenewsOn: w.domain_renews_on || '',
                             })
                           }
                         >
@@ -385,6 +399,20 @@ export function Websites() {
                   <SelectItem key={k} value={k}>{k}</SelectItem>
                 ))}
               </Select>
+            </Field>
+
+            {/* On the website, not the subscription: the domain outlives the billing.
+                That is the whole point — an ex-client's domain keeps renewing after
+                their subscription is long gone. */}
+            <Field
+              label="Domain renews"
+              hint="When the registration next expires. The daily email flags it 30 days out, and keeps flagging it until you move this date on or clear it. Leave blank if the client renews it themselves."
+            >
+              <Input
+                type="date"
+                value={editing.domainRenewsOn}
+                onChange={(e) => setEditing({ ...editing, domainRenewsOn: e.target.value })}
+              />
             </Field>
 
             {/* Owner/status/billing/period live on the subscription, not the website, so they

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { TEMPLATES, templateText, listTemplates, documentBlocks, documentFilename } = require('./index');
+const { TEMPLATES, templateText, listTemplates, documentBlocks, documentFilename, defaultRef, withRef } = require('./index');
 const { VARIABLES, BLANK, varsIn, fill, fieldsFor } = require('./variables');
 const { parse, plain } = require('./markdown');
 
@@ -302,4 +302,82 @@ test('a multi-line value expands into real blocks', () => {
   const blocks = parse(fill('{{SCOPE}}', { SCOPE: '- One\n- Two' }, {}));
   assert.strictEqual(blocks[0].type, 'ul');
   assert.deepStrictEqual(blocks[0].items.map(plain), ['One', 'Two']);
+});
+
+test('the client copy leaves an unfilled field empty; the review copy marks it', () => {
+  const forClient = documentBlocks('website-agreement', { values: {}, reviewNotes: false });
+  const forAttorney = documentBlocks('website-agreement', { values: {}, reviewNotes: true });
+
+  const clientText = forClient.map((b) => plain(b.runs || []) + (b.rows || []).flat().map((c) => plain(c)).join(' ')).join('\n');
+  const attorneyText = forAttorney.map((b) => plain(b.runs || []) + (b.rows || []).flat().map((c) => plain(c)).join(' ')).join('\n');
+
+  // Several fields are MEANT to be empty -- a client who is not VAT registered, a deal
+  // with no backups. Printing [________] against those says a value is missing when none
+  // was ever due, which is the whole reason the client copy passes ''.
+  assert.doesNotMatch(clientText, /\[_+\]/, 'no ruled blanks on the copy that goes to the client');
+  assert.match(attorneyText, /\[_+\]/, 'the review copy still shows you what is unfilled');
+});
+
+test('a filled field is identical on both copies', () => {
+  const values = { CLIENT_LEGAL_NAME: 'Acme Trading (Pty) Ltd' };
+  for (const reviewNotes of [true, false]) {
+    const text = documentBlocks('website-agreement', { values, reviewNotes })
+      .map((b) => (b.rows || []).flat().map((c) => plain(c)).join(' '))
+      .join('\n');
+    assert.match(text, /Acme Trading \(Pty\) Ltd/);
+  }
+});
+
+test('blanking a value does not leave its punctuation behind', () => {
+  // The party table pairs values inside parentheses and around a bullet. Substituting ''
+  // for the second half of each would otherwise print "Jane Doe ()" and a trailing "·" on
+  // a contract going to a client.
+  const rows = documentBlocks('website-agreement', {
+    values: { CLIENT_REPRESENTATIVE: 'Jane Doe', CLIENT_EMAIL: 'ops@acme.co.za' },
+    reviewNotes: false,
+  }).find((b) => b.type === 'table').rows.map((r) => r.map((c) => plain(c)));
+
+  // Two rows are labelled Contact -- ours then the client's. The client's is the last.
+  const cell = (label) => rows.filter((r) => r[0] === label).pop()[1];
+  assert.equal(cell('Signing for the Client'), 'Jane Doe');
+  assert.equal(cell('Contact'), 'ops@acme.co.za');
+  assert.doesNotMatch(rows.flat().join('|'), /\(\s*\)|·\s*$|^\s*·/m);
+});
+
+test('a pair with both halves present keeps its separator', () => {
+  const rows = documentBlocks('website-agreement', {
+    values: { CLIENT_REPRESENTATIVE: 'Jane Doe', CLIENT_REP_CAPACITY: 'Director', CLIENT_EMAIL: 'a@b.co.za', CLIENT_PHONE: '021 555 0100' },
+    reviewNotes: false,
+  }).find((b) => b.type === 'table').rows.map((r) => r.map((c) => plain(c)));
+
+  const cell = (label) => rows.filter((r) => r[0] === label).pop()[1];
+  assert.equal(cell('Signing for the Client'), 'Jane Doe (Director)');
+  assert.equal(cell('Contact'), 'a@b.co.za · 021 555 0100');
+});
+
+test('a blank reference is generated from the document, the date and the client', () => {
+  const ref = defaultRef('website-agreement', { CLIENT_LEGAL_NAME: 'Acme Trading (Pty) Ltd' });
+  assert.match(ref, /^WA-\d{8}-ACMETR$/);
+  // Falls back to the trading name, and copes with having neither.
+  assert.match(defaultRef('master-agreement', { CLIENT_NAME: 'Bo Kaap Deli' }), /^MCA-\d{8}-BOKAAP$/);
+  assert.match(defaultRef('change-request', {}), /^CR-\d{8}$/, 'no client yet is still a usable reference');
+});
+
+test('a reference you typed yourself is never overwritten', () => {
+  assert.equal(withRef('website-agreement', { DOCUMENT_REF: 'MINE-001' }).DOCUMENT_REF, 'MINE-001');
+  // Blank and absent both mean "generate one" -- an empty string is what the form sends
+  // for a field you never touched, so treating it as a typed value would print nothing.
+  assert.match(withRef('website-agreement', {}).DOCUMENT_REF, /^WA-\d{8}$/);
+  assert.match(withRef('website-agreement', { DOCUMENT_REF: '' }).DOCUMENT_REF, /^WA-\d{8}$/);
+});
+
+test('a money default is formatted like a typed one', () => {
+  // HOURLY_RATE defaults to '250'. Printed raw it reads "250" in a column where every
+  // other figure reads "R 250,00", which looks like a different kind of number.
+  const typed = fill('{{HOURLY_RATE}}', { HOURLY_RATE: '250' });
+  const defaulted = fill('{{HOURLY_RATE}}', {});
+  assert.equal(defaulted, typed);
+  assert.match(defaulted, /^R\s*250,00$/);
+  // A prose default is not mangled on the way through the same path.
+  assert.equal(fill('{{PAYMENT_TERMS}}', {}), '30 days from the date of invoice');
 });

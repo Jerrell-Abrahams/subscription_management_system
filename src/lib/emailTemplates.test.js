@@ -68,3 +68,37 @@ test('subject counts every populated section', () => {
   });
   assert.equal(mail.subject, '1 overdue · 1 expiring · 1 follow-up — Complex AI');
 });
+
+test('a domain renewing under a cancelled subscription is called out as money leaking', () => {
+  const mail = digest({
+    domains: [
+      { domain: 'cornerspaza.co.za', renewsOn: '2026-09-01', note: 'expired', orphaned: true, customer: 'Corner Spaza' },
+      { domain: 'complexai.co.za', renewsOn: '2026-09-10', note: 'internal', orphaned: false, customer: null },
+    ],
+    today: TODAY,
+  });
+  assert.match(mail.html, /Domains renewing \(2\)/);
+  assert.match(mail.html, /Corner Spaza is no longer paying/);
+  // The internal domain is listed but must not be dressed up as a leak. Asserted by
+  // counting rather than by proximity: every section header links to admin.complexai.co.za,
+  // so a regex spanning from "complexai.co.za" to "no longer paying" matches the heading.
+  assert.match(mail.html, /complexai\.co\.za<\/strong> — renews 10 Sept 2026 · <span[^>]*>internal</);
+  assert.equal(mail.html.match(/no longer paying/g).length, 1);
+  assert.match(mail.subject, /2 domains/);
+});
+
+test('a renewal date already past reads as due, without claiming it renewed', () => {
+  const mail = digest({
+    domains: [{ domain: 'late.co.za', renewsOn: '2026-08-14', note: 'active', orphaned: false }],
+    today: TODAY,
+  });
+  assert.match(mail.html, /was due 3 days ago/);
+});
+
+test('a domain the client renews themselves never reaches the digest', () => {
+  // Null domain_renews_on is filtered out in the query, so an empty list here is the
+  // whole contract -- the section must vanish rather than render an empty heading.
+  const mail = digest({ domains: [], followUps: [{ name: 'Bo Kaap Deli', followUpDate: TODAY }], today: TODAY });
+  assert.doesNotMatch(mail.html, /Domains renewing/);
+  assert.doesNotMatch(mail.subject, /domain/);
+});

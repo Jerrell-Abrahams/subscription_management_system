@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { FileText, Download } from 'lucide-react';
+import { FileText, Download, CircleHelp } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { listDocumentTemplates, generateDocument } from '../adminApi';
 import { Button } from '../components/ui/Button';
@@ -32,6 +32,31 @@ const storageKey = (slug) => `documents:${slug}`;
 const textarea =
   'w-full rounded-md border border-border-2 bg-panel px-[11px] py-2 text-[13.5px] text-text ' +
   'placeholder:text-dim focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40';
+
+// Hover tooltip on desktop, plain visible text on a phone. Every one of the ~30 fields on
+// a document has a hint, and inline that reads as more explanation than form -- but `title`
+// never fires without a pointer, so a tooltip-only version leaves the mobile console with
+// no help at all, on the screen where the guidance is load-bearing ("this is what makes
+// their signature binding"). Two Tailwind breakpoints, no popover library.
+//
+// The marker is aria-hidden and not focusable: it is decoration over text that is already
+// in the DOM. `aria-label` on a bare <span> is not reliably announced anyway, and this one
+// sits inside Field's <label> (Input.jsx:31), where a click would just forward to the input.
+function Help({ text }) {
+  return (
+    <span
+      aria-hidden="true"
+      title={text}
+      className="hidden cursor-help text-text/35 transition-colors hover:text-text/70 sm:inline-flex"
+    >
+      <CircleHelp size={12.5} />
+    </span>
+  );
+}
+
+// The one multi-line default is the maintenance list. Five bullet lines pasted into a
+// tooltip is unreadable, and its hint says in words what the default is anyway.
+const singleLineDefault = (field) => field.default && !field.default.includes('\n');
 
 export function Documents() {
   const [templates, setTemplates] = useState(null);
@@ -205,11 +230,27 @@ export function Documents() {
               const value = values[field.name] ?? '';
               const onChange = (e) => update({ ...values, [field.name]: e.target.value });
               const wide = field.type === 'textarea';
+              const help = [field.hint, singleLineDefault(field) && `Defaults to "${field.default}".`]
+                .filter(Boolean)
+                .join(' ');
               return (
                 <Field
                   key={field.name}
-                  label={field.label}
-                  hint={field.hint || (field.default ? `Defaults to "${field.default}"` : '')}
+                  label={
+                    <span className="inline-flex items-center gap-1.5">
+                      {field.label}
+                      <Help text={help} />
+                      {/* The one copy of the text a screen reader reads, at every width.
+                          The visible mobile hint below is aria-hidden so it is not
+                          announced twice on a phone. */}
+                      <span className="sr-only">{help}</span>
+                    </span>
+                  }
+                  hint={
+                    <span className="sm:hidden" aria-hidden="true">
+                      {help}
+                    </span>
+                  }
                   className={wide ? 'sm:col-span-2' : ''}
                 >
                   {wide ? (

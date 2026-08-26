@@ -26,6 +26,9 @@ const PAPER = '#ffffff';
 
 const ASSETS = path.join(__dirname, '..', '..', 'assets');
 const LOGO = path.join(ASSETS, 'logo.svg');
+// Committed alongside the logo, not an env var: see the comment on signatureSvg() in
+// documentPdf.js for why. Exported so documentPdf.js does not need its own `path`/ASSETS.
+const SIGNATURE = path.join(ASSETS, 'signature.svg');
 const FONTS = {
   display: path.join(ASSETS, 'fonts', 'SpaceGrotesk-Bold.ttf'),
   displaySemi: path.join(ASSETS, 'fonts', 'SpaceGrotesk-SemiBold.ttf'),
@@ -87,10 +90,16 @@ const hrule = (doc, x1, x2, y, color) =>
 // own .path() draws it directly from the SVG's path data.
 // ponytail: handles exactly that shape -- no groups, gradients, strokes or transforms.
 // Swap in svg-to-pdfkit if the logo ever gains any of those.
-function drawLogo(doc, file, xPx, yPx, widthPx) {
-  const svg = fs.readFileSync(file, 'utf8');
+const svgBox = (svg) => {
   const box = /viewBox="([-\d.\s]+)"/.exec(svg);
   const [vx, vy, vw, vh] = box[1].trim().split(/\s+/).map(Number);
+  return { vx, vy, vw, vh, aspect: vw / vh };
+};
+
+// Takes the SVG *source*, not a path, so the same renderer serves the logo on disk and the
+// signature held in an env var. Returns the drawn height, since callers lay out beneath it.
+function drawSvg(doc, svg, xPx, yPx, widthPx, color) {
+  const { vx, vy, vw, vh } = svgBox(svg);
   const heightPx = (widthPx * vh) / vw;
 
   doc.save().translate(px(xPx), px(yPx)).scale(px(widthPx) / vw).translate(-vx, -vy);
@@ -100,11 +109,14 @@ function drawLogo(doc, file, xPx, yPx, widthPx) {
     const fill = /\bfill="([^"]+)"/.exec(tag[1]);
     // Unfilled paths are the mark itself; the explicit white ones are counters punched
     // back out of it, and they only work because they're drawn in document order.
-    doc.path(d[1]).fill(fill ? fill[1] : INK_STRONG);
+    doc.path(d[1]).fill(fill ? fill[1] : color || INK_STRONG);
   }
   doc.restore();
   return heightPx;
 }
+
+const drawLogo = (doc, file, xPx, yPx, widthPx) =>
+  drawSvg(doc, fs.readFileSync(file, 'utf8'), xPx, yPx, widthPx);
 
 function toBuffer(doc) {
   return new Promise((resolve, reject) => {
@@ -131,6 +143,7 @@ module.exports = {
   CALLOUT_BG,
   PAPER,
   LOGO,
+  SIGNATURE,
   registerFonts,
   text,
   widthOf,
@@ -139,5 +152,7 @@ module.exports = {
   rect,
   hrule,
   drawLogo,
+  drawSvg,
+  svgBox,
   toBuffer,
 };

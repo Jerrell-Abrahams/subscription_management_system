@@ -254,8 +254,21 @@ router.post('/websites', async (req, res) => {
 const WEBSITE_KINDS = ['client', 'demo', 'internal'];
 
 router.patch('/websites/:id', async (req, res) => {
-  const { domain, kind } = req.body;
+  const { domain, kind, domainRenewsOn } = req.body;
   const patch = {};
+
+  // '' clears it back to untracked, which is how you tell the digest to stop asking about
+  // a domain you have handed over or let go. Anything else has to parse as a real date --
+  // a typo stored as garbage would silently drop the row out of the renewal query.
+  if (domainRenewsOn !== undefined) {
+    if (domainRenewsOn === null || domainRenewsOn === '') {
+      patch.domain_renews_on = null;
+    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(domainRenewsOn) || Number.isNaN(Date.parse(domainRenewsOn))) {
+      return res.status(400).json({ error: 'domainRenewsOn must be a YYYY-MM-DD date' });
+    } else {
+      patch.domain_renews_on = domainRenewsOn;
+    }
+  }
 
   if (domain !== undefined) {
     const host = normalizeDomain(domain);
@@ -278,7 +291,7 @@ router.patch('/websites/:id', async (req, res) => {
     .from('websites')
     .update(patch)
     .eq('id', req.params.id)
-    .select('id, domain, kind')
+    .select('id, domain, kind, domain_renews_on')
     .single();
   if (error) {
     if (error.code === '23505') return res.status(409).json({ error: 'Domain already registered' });

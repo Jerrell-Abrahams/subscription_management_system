@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { Search, Radar, Target, PhoneCall, CalendarClock, Trash2, Pencil, Plus, Archive, Check, MapPin, X, MessageCircle, TrendingUp } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { chartTooltip } from '../lib/chart';
-import { money } from '../lib/format';
+import { money, parseLocalDate } from '../lib/format';
 import { supabase } from '../supabaseClient';
 import {
   searchLeads,
@@ -214,7 +214,7 @@ function GoalCard({ goal, onEdit, onBump, onArchive }) {
   const today = todayStr();
   const overdue = !done && goal.due_date && goal.due_date < today;
   const daysLeft = goal.due_date
-    ? Math.round((new Date(`${goal.due_date}T00:00:00`) - new Date(`${today}T00:00:00`)) / 86400000)
+    ? Math.round((parseLocalDate(goal.due_date) - parseLocalDate(today)) / 86400000)
     : null;
   const soon = !done && !overdue && daysLeft !== null && daysLeft <= 3;
 

@@ -112,7 +112,7 @@ Target dates assume the Client meets its responsibilities in clause 8 and that t
 | Deposit payable on signature | {{DEPOSIT_AMOUNT}} |
 | Milestone payments | As set out in clause 9 |
 | Balance on acceptance | The remainder of the total project fee |
-| Additional work | {{HOURLY_RATE}} |
+| Additional work | {{HOURLY_RATE}} per hour |
 
 All amounts are in South African Rand. Complex AI is not currently a registered VAT vendor and no VAT is charged.
 

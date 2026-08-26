@@ -1,62 +1,75 @@
 const express = require('express');
 const supabase = require('../config/supabase');
 const adminAuth = require('../middleware/adminAuth');
-const { fetchHistory, toEntries } = require('../lib/payfast');
+const { fetchTransactions, toEntries, skipReason } = require('../lib/paystack');
+const { sastDay: isoDay } = require('../lib/sast');
 
 const router = express.Router();
 router.use(adminAuth);
 
 // The Finance page reads and writes finance_entries straight through the browser's anon
-// key. This route exists for the one thing that cannot: the Payfast passphrase is a
-// server-side secret, so the sync has to happen here.
+// key. This route exists for the one thing that cannot: PAYSTACK_SECRET_KEY is a
+// server-side secret and must never reach the browser.
 
-// How far back a sync with no explicit `from` reaches. The Finance page's own default.
+// How far back a sync with no explicit `from` reaches. Bounded rather than "everything" so
+// a first pull can't fill the ledger with surprises.
 const DEFAULT_DAYS = 90;
 // What the nightly cron re-checks. Deliberately a window rather than "since last sync":
 // there is no last-sync timestamp to keep correct, re-importing is free (the unique index
-// drops the duplicates), and a week of overlap absorbs both a missed night and any
-// transaction Payfast backdates.
+// drops the duplicates), and a week of overlap absorbs a missed night.
 const NIGHTLY_DAYS = 7;
 
-// 'en-CA' is the ISO-shaped locale, so this is the SAST calendar date. toISOString() would
-// be UTC and hand back yesterday until 02:00 -- the same trap admin/src/lib/format.js
-// documents, and the reason a sync run at 00:30 must not silently drop today.
-const isoDay = (date) => date.toLocaleDateString('en-CA', { timeZone: 'Africa/Johannesburg' });
 const daysAgo = (n) => isoDay(new Date(Date.now() - n * 86400000));
 
-async function syncPayfast({ from, to } = {}) {
-  const merchantId = process.env.PAYFAST_MERCHANT_ID;
-  const passphrase = process.env.PAYFAST_PASSPHRASE;
-  if (!merchantId || !passphrase) {
+async function syncPaystack({ from, to } = {}) {
+  const secretKey = process.env.PAYSTACK_SECRET_KEY;
+  if (!secretKey) {
     throw new Error(
-      'Payfast is not configured: set PAYFAST_MERCHANT_ID and PAYFAST_PASSPHRASE on the server. ' +
-        'The passphrase is not your merchant key -- set one under Settings > Security in Payfast.'
+      'Paystack is not configured: set PAYSTACK_SECRET_KEY on the server. ' +
+        'It is the sk_live_... (or sk_test_...) key from Settings > API Keys & Webhooks in Paystack.'
     );
   }
 
-  const transactions = await fetchHistory({
+  const transactions = await fetchTransactions({
     from: from || daysAgo(DEFAULT_DAYS),
     to: to || isoDay(new Date()),
-    merchantId,
-    passphrase,
+    secretKey,
   });
   const rows = toEntries(transactions);
 
-  // Loud rather than quiet. Payfast's history column names are the one part of this that
-  // has not been checked against a live account, so a mapping miss reports the columns it
-  // actually received -- otherwise a rename looks exactly like an empty account, and the
-  // failure mode of a silent money importer is a ledger you trust and shouldn't.
-  if (transactions.length && !rows.length) {
-    throw new Error(
-      `Payfast returned ${transactions.length} transaction(s) but none could be read. ` +
-        `Columns seen: ${Object.keys(transactions[0]).join(', ')}. Add the right names to pick() in src/lib/payfast.js.`
-    );
+  // An already-imported transaction still maps to a row here and is dropped later by the
+  // unique index, so transactions coming back with NOTHING mapped is systematic, not a
+  // repeat sync: the account switched off ZAR, paid_at arrived in a shape occurredOn
+  // rejects, amount stopped being a number. Returning { imported: 0 } reports all three to
+  // the UI as "0 new entries", which Finance.jsx's own comment calls the normal result of a
+  // second sync -- so real payments would go missing while the toast read as working.
+  if (!rows.length) {
+    if (transactions.length) {
+      // Tallied via skipReason rather than guessed: ZAR is only one of several reasons a
+      // transaction can fail to map (see src/lib/paystack.js), and pointing at the wrong
+      // one sends whoever is debugging this to check currency while the real cause --
+      // say, a paid_at shape occurredOn no longer parses -- goes unlooked-at.
+      const counts = {};
+      for (const t of transactions) {
+        const reason = skipReason(t);
+        if (reason) counts[reason] = (counts[reason] || 0) + 1;
+      }
+      const breakdown = Object.entries(counts)
+        .map(([reason, n]) => `${n} ${reason}`)
+        .join(', ');
+      throw new Error(
+        `Paystack returned ${transactions.length} successful transaction(s) but none could be read as ledger entries: ` +
+          `${breakdown}. Nothing was imported.`
+      );
+    }
+    return { found: 0, imported: 0 };
   }
-  if (!rows.length) return { found: 0, imported: 0 };
 
   // ignoreDuplicates, NOT a merge: a re-sync must never overwrite a category you typed by
-  // hand. Idempotent on finance_entries_source_external_idx, which is what makes
-  // overlapping windows and a double-fired cron cost nothing.
+  // hand. Idempotent on finance_entries_source_external_idx -- the index created by
+  // src/db/payfast.sql, which is provider-agnostic and outlived the integration that
+  // introduced it -- and that is what makes overlapping windows and a double-fired cron
+  // cost nothing.
   const { data, error } = await supabase
     .from('finance_entries')
     .upsert(rows, { onConflict: 'source,external_id', ignoreDuplicates: true })
@@ -66,12 +79,12 @@ async function syncPayfast({ from, to } = {}) {
   return { found: transactions.length, imported: (data || []).length };
 }
 
-router.post('/payfast-sync', async (req, res) => {
+router.post('/paystack-sync', async (req, res) => {
   try {
-    res.json(await syncPayfast(req.body || {}));
+    res.json(await syncPaystack(req.body || {}));
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
-module.exports = { router, syncPayfast, NIGHTLY_DAYS, daysAgo };
+module.exports = { router, syncPaystack, NIGHTLY_DAYS, daysAgo };

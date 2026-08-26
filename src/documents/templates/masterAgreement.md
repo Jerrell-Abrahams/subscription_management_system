@@ -117,7 +117,7 @@ All amounts are in South African Rand.
 
 **Third-party costs.** Costs payable to third parties, such as domain registration, hosting, licences and paid application programming interfaces, are not included in the fees unless the Service Schedule or Statement of Work says so. Complex AI will tell the Client about a material third-party cost before incurring it on the Client's behalf, and will not incur it without the Client's approval.
 
-**Additional work.** Work outside the agreed scope is charged at {{HOURLY_RATE}}, or at the rate stated in the applicable Statement of Work, and only after the Client has approved a Change Request.
+**Additional work.** Work outside the agreed scope is charged at {{HOURLY_RATE}} per hour, or at the rate stated in the applicable Statement of Work, and only after the Client has approved a Change Request.
 
 **Due date.** Unless the Service Schedule or Statement of Work states otherwise, invoices are payable within {{PAYMENT_TERMS}}. This clause is the only place payment timing is defined; a Service Schedule or Statement of Work states amounts and payment points, and this clause governs when payment falls due.
 
@@ -270,7 +270,7 @@ On request, and while the Services are running, Complex AI will provide the Clie
 
 ## 15. Support and Maintenance
 
-The level of support the Client receives is stated in the applicable Service Schedule or Statement of Work. Where nothing is stated, support is provided on a reasonable-endeavours basis during business hours and is charged at {{HOURLY_RATE}}.
+The level of support the Client receives is stated in the applicable Service Schedule or Statement of Work. Where nothing is stated, support is provided on a reasonable-endeavours basis during business hours and is charged at {{HOURLY_RATE}} per hour.
 
 Support is available {{SUPPORT_HOURS}} through {{SUPPORT_CHANNEL}}.
 
@@ -384,7 +384,7 @@ When this Agreement, a Service Schedule or a Statement of Work ends:
 
 **Intellectual property.** Licences granted to the Client under clause 8.3 for Deliverables that have been paid for in full survive termination. Licences relating to subscription software end with the subscription. Complex AI keeps ownership of its own technology in all cases.
 
-**Domains and third-party accounts.** Where Complex AI holds a domain or a third-party account on the Client's behalf, it will cooperate reasonably in transferring it to the Client, at the Client's cost, provided all amounts owing have been paid.
+**Domains and third-party accounts.** Where Complex AI holds a domain or a third-party account on the Client's behalf, it will cooperate reasonably in transferring it to the Client, at the Client's cost, provided all amounts owing have been paid. Complex AI stops renewing a domain or account it was paying for when the Service Schedule or Statement of Work it relates to ends, and is not liable for a domain or account that lapses after that date.
 
 **Surviving clauses.** Clauses 8 (Intellectual Property), 9 (Client Content), 10 (Confidentiality), 11 (Personal Information), 17 (Limitation of Liability), 18 (Indemnity), 21 (Effect of Termination), 22 (Dispute Resolution) and 23 (Governing Law) survive termination, together with any other clause that by its nature is intended to.
 
@@ -398,7 +398,7 @@ If a dispute arises, the Parties will follow these steps in order.
 
 **Mediation.** If the dispute is still unresolved, either Party may refer it to mediation before {{MEDIATION_BODY}}. The Parties will share the mediator's costs equally and will participate in good faith.
 
-**Legal proceedings.** If mediation does not resolve the dispute, or a Party declines to mediate, either Party may institute legal proceedings in {{COURT_JURISDICTION}}.
+**Legal proceedings.** If mediation does not resolve the dispute, or a Party declines to mediate, either Party may institute legal proceedings in court.
 
 Nothing in this clause prevents a Party from applying urgently to a court for interim relief where it genuinely needs to, or from enforcing an undisputed debt.
 

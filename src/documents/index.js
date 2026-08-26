@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const { parse, plain } = require('./markdown');
-const { fill, fieldsFor, varsIn } = require('./variables');
+const { fill, fieldsFor, varsIn, BLANK } = require('./variables');
+const { sastDay } = require('../lib/sast');
 
 // The document catalogue, and the one place a template is turned into drawable blocks.
 //
@@ -104,10 +105,39 @@ function listTemplates() {
 function documentBlocks(slug, { values = {}, settings = {}, reviewNotes = true } = {}) {
   const raw = templateText(slug);
   const main = reviewNotes ? raw.replace(NOTES_MARKER, '[[PAGEBREAK]]') : raw.split(NOTES_MARKER)[0];
-  const blocks = parse(fill(main, values, settings));
+  // '' on the client copy: an unfilled placeholder is either a field that was meant to be
+  // empty, or one you should have caught on the form, which shows "N of M still blank"
+  // before you ever generate. Neither is worth printing [________] at a client over.
+  const blocks = parse(fill(main, values, settings, reviewNotes ? BLANK : ''));
   if (reviewNotes) return blocks;
   return blocks.filter((b) => !(b.type === 'callout' && REVIEW_CALLOUT.test(plain(b.runs))));
 }
+
+// A filing reference you do not have to invent: what the document is, when it was made,
+// and who it is for -- "WA-20260824-ACMETR". It mirrors documentFilename on purpose, so the
+// reference printed on page one and the PDF in your downloads folder identify each other.
+//
+// Deliberately not a sequence. A counter needs a table, a migration and a definitive answer
+// to "what number are we on" across two Vercel projects, to produce something no easier to
+// find than a date. Typing your own into the form still wins over this.
+function defaultRef(slug, values = {}) {
+  const template = bySlug(slug);
+  if (!template) return '';
+  const client = String(values.CLIENT_LEGAL_NAME || values.CLIENT_NAME || '')
+    .replace(/[^A-Za-z0-9]/g, '')
+    .toUpperCase()
+    .slice(0, 6);
+  const day = sastDay(new Date()).replace(/-/g, '');
+  return [template.refPrefix, day, client || null].filter(Boolean).join('-');
+}
+
+// Values as the renderer should see them: a reference you typed always wins, and a blank
+// one is generated. One place, so the page-one meta block and the {{DOCUMENT_REF}} in the
+// clause text cannot end up saying different things.
+const withRef = (slug, values = {}) => ({
+  ...values,
+  DOCUMENT_REF: values.DOCUMENT_REF || defaultRef(slug, values),
+});
 
 // "Master-Agreement-Acme-Pty-Ltd-2026-08-18.pdf" -- readable in a downloads folder and in
 // an email attachment list, which is where these actually get filed.
@@ -119,11 +149,11 @@ function documentFilename(slug, values = {}) {
   return [
     slugify(template.short),
     client ? slugify(client) : null,
-    new Date().toISOString().slice(0, 10),
+    sastDay(new Date()),
   ]
     .filter(Boolean)
     .join('-')
     .concat('.pdf');
 }
 
-module.exports = { TEMPLATES, bySlug, templateText, listTemplates, documentBlocks, documentFilename };
+module.exports = { TEMPLATES, bySlug, templateText, listTemplates, documentBlocks, documentFilename, defaultRef, withRef };

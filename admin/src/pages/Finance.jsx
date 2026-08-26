@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { ArrowDownLeft, ArrowUpRight, Pencil, Plus, RefreshCw, Scale, Trash2, Wallet } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { supabase } from '../supabaseClient';
-import { syncPayfast } from '../adminApi';
+import { syncPaystack } from '../adminApi';
 import { Badge } from '../components/ui/Badge';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -14,21 +14,13 @@ import { Skeleton, SkeletonRows } from '../components/ui/Skeleton';
 import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { chartTooltip } from '../lib/chart';
-import { money, day, today } from '../lib/format';
+import { money, day, today, parseLocalDate } from '../lib/format';
 import { monthTotals, spendByCategory, runningBalance, usedCategories, canonicalCategory } from '../lib/finance';
 
 const emptyEntry = () => ({ occurred_on: today(), direction: 'out', amount: '', category: '', description: '' });
 
-// How far back the Sync dialog offers to look by default. Matches the server's own
-// fallback; a first pull against an account whose history you've forgotten is the one that
-// fills the ledger with surprises, so it is bounded rather than "everything".
-const SYNC_DAYS = 90;
-const daysAgo = (n) => new Date(Date.now() - n * 86400000).toLocaleDateString('sv');
-
-// 'YYYY-MM' -> 'August 2026'. The 'T00:00' matters: without it the string parses as UTC
-// midnight and renders as the previous month for anyone west of Greenwich.
-const monthLabel = (month) =>
-  new Date(`${month}-01T00:00`).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' });
+// 'YYYY-MM' -> 'August 2026'.
+const monthLabel = (month) => parseLocalDate(`${month}-01`).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' });
 
 function KpiCard({ icon: Icon, label, value, sub, tone, onClick }) {
   return (
@@ -64,9 +56,11 @@ export function Finance() {
 
   const [entryForm, setEntryForm] = useState(null); // null = closed, {} = new, {id} = editing
   const [balanceForm, setBalanceForm] = useState(null);
-  const [syncForm, setSyncForm] = useState(null);
   const [entryToDelete, setEntryToDelete] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  // Its own flag rather than sharing `submitting`: saving an entry would otherwise flip the
+  // Sync button to "Syncing…" behind the open modal.
+  const [syncing, setSyncing] = useState(false);
 
   // ponytail: loads every entry on every page view. The running balance is cumulative from
   // the opening date, so there is no smaller query that is still correct, and the category
@@ -115,9 +109,12 @@ export function Finance() {
     [rows, settings, asOf]
   );
 
-  // A Payfast row's money came from Payfast and is more trustworthy than a retype, so only
-  // the two fields a human actually improves are sent. Enforced here as well as by the
-  // disabled inputs -- a disabled field is a UI courtesy, not a rule.
+  // An imported row's money came from the provider and is more trustworthy than a retype,
+  // so only the two fields a human actually improves are sent. Enforced here as well as by
+  // the disabled inputs -- a disabled field is a UI courtesy, not a rule.
+  //
+  // Keyed on `source` rather than on a provider name, so it covers the live Paystack rows
+  // and the historical Payfast ones the same way.
   const synced = !!entryForm?.source;
 
   async function saveEntry(e) {
@@ -173,25 +170,26 @@ export function Finance() {
     load();
   }
 
-  async function runSync(e) {
-    e.preventDefault();
-    setSubmitting(true);
+  // No date-range dialog: the server's 90-day default is the only window worth asking for,
+  // and this button exists for "I was just paid, show me now" -- which a form in the way
+  // does not serve. The nightly cron covers everything else.
+  async function runSync() {
+    setSyncing(true);
     try {
-      const { found, imported } = await syncPayfast({ from: syncForm.from, to: syncForm.to });
+      const { found, imported } = await syncPaystack();
       // "found 12, imported 0" is the normal result of a second sync, and reads as working
-      // rather than broken. "found 0" on an account you believe has transactions is the
-      // signal that the window, not the integration, is wrong.
+      // rather than broken. "found 0" on an account you believe has payments is the signal
+      // that Paystack, not the ledger, is where to look.
       toast.success(
         found === 0
-          ? 'Payfast had no transactions in that window.'
-          : `${imported} new ${imported === 1 ? 'entry' : 'entries'} from ${found} Payfast transaction(s).`
+          ? 'No Paystack payments in the last 90 days.'
+          : `${imported} new ${imported === 1 ? 'entry' : 'entries'} from ${found} Paystack payment(s).`
       );
-      setSyncForm(null);
       load();
     } catch (err) {
       toast.error(err.message);
     }
-    setSubmitting(false);
+    setSyncing(false);
   }
 
   async function deleteEntry() {
@@ -237,12 +235,9 @@ export function Finance() {
           />
           {/* h-[34px]/px-3.5: matches the month field beside it. At the default h-8 the
               button sits 2px short of the input and reads as cramped next to it. */}
-          <Button
-            variant="secondary"
-            className="h-[34px] px-3.5"
-            onClick={() => setSyncForm({ from: daysAgo(SYNC_DAYS), to: today() })}
-          >
-            <RefreshCw size={16} /> Sync Payfast
+          <Button variant="secondary" className="h-[34px] px-3.5" disabled={syncing} onClick={runSync}>
+            <RefreshCw size={16} className={syncing ? 'animate-spin' : undefined} />
+            {syncing ? 'Syncing…' : 'Sync Paystack'}
           </Button>
           <Button className="h-[34px] px-3.5" onClick={() => setEntryForm(emptyEntry())}>
             <Plus size={16} /> Add entry
@@ -350,7 +345,7 @@ export function Finance() {
                     {/* Where the number came from, on the row where you'd doubt it. Also the
                         visible half of the edit lock -- a badged row won't let you retype
                         its amount. */}
-                    {e.source === 'payfast' && <Badge>Payfast</Badge>}
+                    {e.source && <Badge className="capitalize">{e.source}</Badge>}
                   </span>
                 </Td>
                 <Td>{e.category || '—'}</Td>
@@ -395,8 +390,8 @@ export function Finance() {
           <form className="space-y-3" onSubmit={saveEntry}>
             {synced && (
               <p className="rounded-md border border-border bg-raised px-3 py-2 text-xs text-text/70">
-                Pulled from Payfast. The date, direction and amount are theirs — categorise it however you like,
-                but those three stay as Payfast reported them.
+                Pulled from <span className="capitalize">{entryForm.source}</span>. The date, direction and amount
+                are theirs — categorise it however you like, but those three stay as reported.
               </p>
             )}
 
@@ -466,50 +461,6 @@ export function Finance() {
               </Button>
               <Button type="submit" disabled={submitting}>
                 {submitting ? 'Saving…' : 'Save entry'}
-              </Button>
-            </div>
-          </form>
-        )}
-      </Modal>
-
-      <Modal open={!!syncForm} onOpenChange={(open) => !open && setSyncForm(null)} title="Sync Payfast">
-        {syncForm && (
-          <form className="space-y-3" onSubmit={runSync}>
-            <p className="text-sm text-text/70">
-              Pulls your Payfast transactions into the ledger. Each payment lands as two entries — the amount in,
-              and Payfast&apos;s fee out — so the fee shows up as a real cost rather than quietly shrinking the
-              payment.
-            </p>
-            {/* The re-run rule is worth saying out loud: without it the natural assumption is
-                that syncing twice doubles your income, and nobody presses the button again. */}
-            <p className="text-xs text-text/60">
-              Safe to run as often as you like — anything already imported is skipped, and your categories are never
-              overwritten. This also runs by itself every night.
-            </p>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="From">
-                <Input
-                  type="date"
-                  required
-                  value={syncForm.from}
-                  onChange={(ev) => setSyncForm({ ...syncForm, from: ev.target.value })}
-                />
-              </Field>
-              <Field label="To">
-                <Input
-                  type="date"
-                  required
-                  value={syncForm.to}
-                  onChange={(ev) => setSyncForm({ ...syncForm, to: ev.target.value })}
-                />
-              </Field>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="secondary" onClick={() => setSyncForm(null)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={submitting}>
-                {submitting ? 'Syncing…' : 'Sync'}
               </Button>
             </div>
           </form>
