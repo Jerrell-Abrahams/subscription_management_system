@@ -284,14 +284,17 @@ export function QrCodes() {
               </Td>
               <Td>
                 <div className="flex items-center gap-1.5">
+                  {/* 18px, not the 15px other icon+label buttons on this page use: these three
+                      have no text to lend them weight, so at 15 they read as lost inside the
+                      32px IconButton square. */}
                   <IconButton onClick={() => openPreview(r)} title="Preview and download">
-                    <QrIcon size={15} />
+                    <QrIcon size={18} />
                   </IconButton>
                   <IconButton onClick={() => copyLink(r)} title="Copy scan link">
-                    <Copy size={15} />
+                    <Copy size={18} />
                   </IconButton>
                   <IconButton onClick={() => setEditing({ ...r })} title="Edit">
-                    <Pencil size={15} />
+                    <Pencil size={18} />
                   </IconButton>
                   <Button
                     variant={r.active ? 'destructive' : 'secondary'}
