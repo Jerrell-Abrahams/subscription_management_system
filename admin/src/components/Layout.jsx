@@ -12,6 +12,7 @@ import {
   Wallet,
   Receipt,
   FileText,
+  QrCode,
   Rocket,
   Activity,
   SlidersHorizontal,
@@ -43,6 +44,7 @@ const navMain = [
   { to: '/finance', label: 'Finance', icon: Wallet },
   { to: '/invoices', label: 'Invoices', icon: Receipt },
   { to: '/documents', label: 'Documents', icon: FileText },
+  { to: '/qr-codes', label: 'QR codes', icon: QrCode },
 ];
 
 const navSecondary = [
@@ -59,9 +61,9 @@ const navSecondary = [
 const supabaseRef = (import.meta.env.VITE_SUPABASE_URL || '').match(/https:\/\/([^.]+)\.supabase\./)?.[1];
 
 // Official brand marks, inlined as their path data rather than pulling in an icon package
-// for four glyphs. The first three are the Simple Icons paths (24x24, CC0); Payfast isn't
-// in Simple Icons, so its chevron is lifted from the logo on payfast.io with the viewBox
-// cropped to just that mark. Colour follows each brand where the brand has one -- GitHub
+// for four glyphs. The first three are the Simple Icons paths (24x24, CC0); Paystack's is
+// drawn here by hand -- four pills, which is its whole mark -- rather than copied from
+// path data I'd be guessing at. Colour follows each brand where the brand has one -- GitHub
 // and Vercel are officially black, which would disappear in dark mode, so they ride on
 // currentColor and invert with the sidebar like the nav icons above.
 const consoles = [
@@ -82,11 +84,14 @@ const consoles = [
     path: 'M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12',
   },
   {
-    label: 'Payfast',
-    href: 'https://my.payfast.io',
-    color: '#E54360',
-    viewBox: '101.78 6.14 10.39 15.58',
-    path: 'M105.59,6.14h-3.81l6.58,7.82-6.51,7.76h3.81l6.51-7.76-6.58-7.82Z',
+    label: 'Paystack',
+    href: 'https://dashboard.paystack.com',
+    color: '#00C3F7',
+    path:
+      'M3.2,2.2h17.6a1.7,1.7 0 0 1 0,3.4h-17.6a1.7,1.7 0 0 1 0,-3.4z' +
+      'M3.2,7.3h17.6a1.7,1.7 0 0 1 0,3.4h-17.6a1.7,1.7 0 0 1 0,-3.4z' +
+      'M3.2,12.4h17.6a1.7,1.7 0 0 1 0,3.4h-17.6a1.7,1.7 0 0 1 0,-3.4z' +
+      'M3.2,17.5h17.6a1.7,1.7 0 0 1 0,3.4h-17.6a1.7,1.7 0 0 1 0,-3.4z',
   },
 ];
 

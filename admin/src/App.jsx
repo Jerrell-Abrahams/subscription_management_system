@@ -17,6 +17,7 @@ import { Leads } from './pages/Leads';
 import { Finance } from './pages/Finance';
 import { Invoices } from './pages/Invoices';
 import { Documents } from './pages/Documents';
+import { QrCodes } from './pages/QrCodes';
 import { Settings } from './pages/Settings';
 
 export default function App() {
@@ -48,6 +49,7 @@ export default function App() {
               <Route path="/finance" element={<Finance />} />
               <Route path="/invoices" element={<Invoices />} />
               <Route path="/documents" element={<Documents />} />
+              <Route path="/qr-codes" element={<QrCodes />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
           </Routes>

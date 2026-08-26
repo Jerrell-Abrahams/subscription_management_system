@@ -94,11 +94,11 @@ export function getInvoicePdfUrl(id, doc) {
   return authedFetch(`/api/admin/invoices/${id}/pdf${doc === 'receipt' ? '?doc=receipt' : ''}`);
 }
 
-// The one Finance call that can't go straight to Supabase from the browser: the Payfast
-// passphrase is a server secret. Everything else on that page still reads and writes the
-// table directly. `from`/`to` are optional -- the server defaults to the last 90 days.
-export function syncPayfast(payload) {
-  return authedFetch('/api/admin/finance/payfast-sync', { method: 'POST', body: JSON.stringify(payload || {}) });
+// The one Finance call that can't go straight to Supabase from the browser: the Paystack
+// secret key is a server secret. Everything else on that page still reads and writes the
+// table directly. Sent with no window -- the server defaults to the last 90 days.
+export function syncPaystack() {
+  return authedFetch('/api/admin/finance/paystack-sync', { method: 'POST', body: '{}' });
 }
 
 // Whole payload forwarded rather than picked apart: location/industry plus maxResults
@@ -176,4 +176,31 @@ export async function generateDocument(slug, body) {
   }
   const match = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '');
   return { blob: await res.blob(), filename: match ? match[1] : `${slug}.pdf` };
+}
+
+// QR codes. The printed code redirects through our own domain, so the destination stays
+// editable after the cards are printed -- see src/db/qr_codes.sql.
+export function createQrCode(payload) {
+  return authedFetch('/api/admin/qr', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function updateQrCode(id, payload) {
+  return authedFetch(`/api/admin/qr/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+// Not authedFetch, for the same reason generateDocument isn't: that helper always parses
+// JSON and this is an image. The blob serves both the preview and the save button -- an
+// <img src> can't carry a bearer token, and QR Code Monkey's CORS header is pinned to its
+// own site, so the browser can never fetch the image directly either way.
+export async function fetchQrImage(id, format) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch(`${API_BASE_URL}/api/admin/qr/${id}/image?format=${format}`, {
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Could not generate the QR code');
+  }
+  const match = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '');
+  return { blob: await res.blob(), filename: match ? match[1] : `qr.${format}` };
 }
