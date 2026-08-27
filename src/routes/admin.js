@@ -3,6 +3,7 @@ const supabase = require('../config/supabase');
 const adminAuth = require('../middleware/adminAuth');
 const { nextPeriodEnd } = require('../lib/renewal');
 const { normalizeDomain } = require('../lib/websiteAccess');
+const { provisionRestaurant } = require('../lib/restaurantProvision');
 
 const router = express.Router();
 router.use(adminAuth);
@@ -110,6 +111,34 @@ router.post('/subscriptions', async (req, res) => {
   }
 
   res.status(201).json(subscription);
+});
+
+// Second half of creating a "restaurant" subscription: the owner's real login lives in a
+// different Supabase project entirely, so it cannot be created from the browser the way
+// createUser above does -- RESTAURANT_API_SECRET must stay server-side. Kept as its own call
+// (rather than folded into POST /subscriptions) because the restaurant repo's endpoint is
+// idempotent on subscriptionId, so the console can retry exactly this step on failure without
+// risking a second app_user or a second subscription.
+router.post('/subscriptions/:id/provision-restaurant', async (req, res) => {
+  const { email, password, fullName, restaurantName, slug } = req.body;
+  if (!email || !password || !restaurantName) {
+    return res.status(400).json({ error: 'email, password and restaurantName are required' });
+  }
+
+  try {
+    const restaurant = await provisionRestaurant({
+      subscriptionId: req.params.id,
+      email,
+      password,
+      fullName,
+      restaurantName,
+      slug,
+    });
+    res.status(201).json(restaurant);
+  } catch (err) {
+    console.error('[admin] restaurant provisioning failed:', err.message);
+    res.status(502).json({ error: err.message });
+  }
 });
 
 // ponytail: no transition-legality state machine beyond the DB's own status

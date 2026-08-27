@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Plus, Search } from 'lucide-react';
 import { supabase } from '../supabaseClient';
-import { createUser, createSubscription } from '../adminApi';
+import { createUser, createSubscription, provisionRestaurant } from '../adminApi';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Table, Thead, Tbody, Tr, Th, Td } from '../components/ui/Table';
@@ -21,6 +21,13 @@ const emptyForm = {
   newEmail: '',
   newPassword: '',
   newFullName: '',
+  // Only used when the selected product is "restaurant" -- the owner's login lives in a
+  // different Supabase project entirely (see restaurantProvision.js), so it always needs its
+  // own email/password regardless of whether the billing customer above is new or existing.
+  restaurantName: '',
+  restaurantSlug: '',
+  restaurantEmail: '',
+  restaurantPassword: '',
 };
 
 export function Subscriptions() {
@@ -32,6 +39,11 @@ export function Subscriptions() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+  // Set only when billing succeeded but provisioning the restaurant owner's login failed.
+  // { subscriptionId, payload, message } -- enough to retry just that step, since the
+  // restaurant repo's endpoint is idempotent on subscriptionId and re-running createUser /
+  // createSubscription would create a second app_user or a second subscription.
+  const [provisionError, setProvisionError] = useState(null);
 
   async function load() {
     const [{ data: subRows }, { data: userRows }, { data: productRows }] = await Promise.all([
@@ -40,7 +52,7 @@ export function Subscriptions() {
         .select('id, status, max_activations, current_activations, current_period_end, billing_interval, app_users(email), products(name)')
         .order('created_at', { ascending: false }),
       supabase.from('app_users').select('id, email').order('email'),
-      supabase.from('products').select('id, name').order('name'),
+      supabase.from('products').select('id, name, slug').order('name'),
     ]);
     setSubscriptions(subRows || []);
     setUsers(userRows || []);
@@ -71,6 +83,27 @@ export function Subscriptions() {
 
   const activeCount = rows.filter((s) => s.status === 'active').length;
 
+  // slug, not name: names can repeat/change, and the restaurant repo's endpoint is keyed on
+  // this exact string.
+  const isRestaurant = products.find((p) => p.id === form.productId)?.slug === 'restaurant';
+
+  // The part that can fail independently of billing, pulled out so both the initial submit
+  // and a manual retry call it the same way.
+  async function runProvision(subscriptionId, payload) {
+    try {
+      await provisionRestaurant(subscriptionId, payload);
+      toast.success('Restaurant created — billing and owner login are both set up.');
+      setProvisionError(null);
+      setShowForm(false);
+      setForm(emptyForm);
+    } catch (err) {
+      // Billing already exists at this point; do not close or reset -- that would strand it
+      // with no way back to just this one failed step.
+      setProvisionError({ subscriptionId, payload, message: err.message });
+    }
+    load();
+  }
+
   async function handleCreate(e) {
     e.preventDefault();
 
@@ -82,6 +115,14 @@ export function Subscriptions() {
       toast.error(form.isNewUser ? 'Email and password are required.' : 'User is required.');
       return;
     }
+    if (isRestaurant && !form.restaurantName.trim()) {
+      toast.error('Restaurant name is required.');
+      return;
+    }
+    if (isRestaurant && !form.restaurantPassword) {
+      toast.error('A password for the restaurant owner login is required.');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -89,17 +130,30 @@ export function Subscriptions() {
         ? (await createUser({ email: form.newEmail, password: form.newPassword, fullName: form.newFullName })).id
         : form.userId;
 
-      await createSubscription({
+      const subscription = await createSubscription({
         userId,
         productId: form.productId,
         billingInterval: form.billingInterval,
         maxActivations: Number(form.maxActivations) || 1,
       });
 
-      toast.success('Subscription created.');
-      setShowForm(false);
-      setForm(emptyForm);
-      load();
+      if (isRestaurant) {
+        // Defaults to whichever email the billing customer above already used, so the common
+        // case (one person, one login) needs nothing typed twice -- still overridable per field.
+        const billingEmail = form.isNewUser ? form.newEmail : users.find((u) => u.id === userId)?.email;
+        await runProvision(subscription.id, {
+          email: form.restaurantEmail.trim() || billingEmail,
+          password: form.restaurantPassword,
+          fullName: form.newFullName || undefined,
+          restaurantName: form.restaurantName.trim(),
+          slug: form.restaurantSlug.trim() || undefined,
+        });
+      } else {
+        toast.success('Subscription created.');
+        setShowForm(false);
+        setForm(emptyForm);
+        load();
+      }
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -157,7 +211,49 @@ export function Subscriptions() {
         </Tbody>
       </Table>
 
-      <Modal open={showForm} onOpenChange={setShowForm} title="New subscription">
+      <Modal
+        open={showForm}
+        onOpenChange={(open) => {
+          setShowForm(open);
+          if (!open) {
+            setProvisionError(null);
+            setForm(emptyForm);
+          }
+        }}
+        title={provisionError ? 'Finish restaurant setup' : 'New subscription'}
+      >
+        {provisionError ? (
+          <div className="space-y-3">
+            <p className="rounded-md border border-warn/35 bg-warn/8 px-3 py-2 text-xs text-warn">
+              The billing subscription was created. Setting up the restaurant owner&apos;s login
+              failed: {provisionError.message}
+            </p>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setProvisionError(null);
+                  setShowForm(false);
+                  setForm(emptyForm);
+                }}
+              >
+                Close — finish later
+              </Button>
+              <Button
+                type="button"
+                disabled={submitting}
+                onClick={async () => {
+                  setSubmitting(true);
+                  await runProvision(provisionError.subscriptionId, provisionError.payload);
+                  setSubmitting(false);
+                }}
+              >
+                {submitting ? 'Retrying…' : 'Retry'}
+              </Button>
+            </div>
+          </div>
+        ) : (
         <form onSubmit={handleCreate} className="space-y-3">
           <Field
             as="div"
@@ -215,6 +311,46 @@ export function Subscriptions() {
             </Select>
           </Field>
 
+          {isRestaurant && (
+            <div className="space-y-2 rounded-md border border-border-2 p-3">
+              <Field label="Restaurant name">
+                <Input
+                  placeholder="Sipho's Grill"
+                  value={form.restaurantName}
+                  onChange={(e) => setForm({ ...form, restaurantName: e.target.value })}
+                  required
+                />
+              </Field>
+              <Field label="Slug" hint="Printed on the coaster's QR forever. Defaults from the name — only override if you need a specific one.">
+                <Input
+                  placeholder="siphos-grill"
+                  value={form.restaurantSlug}
+                  onChange={(e) => setForm({ ...form, restaurantSlug: e.target.value })}
+                />
+              </Field>
+              <Field
+                as="div"
+                label="Owner login"
+                hint="A separate account from the one above — this is what the restaurant owner signs into their own console with."
+              >
+                <div className="space-y-2">
+                  <Input
+                    type="email"
+                    placeholder={form.isNewUser ? form.newEmail || 'Email' : 'Email (defaults to the customer above)'}
+                    value={form.restaurantEmail}
+                    onChange={(e) => setForm({ ...form, restaurantEmail: e.target.value })}
+                  />
+                  <Input
+                    placeholder="Password"
+                    value={form.restaurantPassword}
+                    onChange={(e) => setForm({ ...form, restaurantPassword: e.target.value })}
+                    required
+                  />
+                </div>
+              </Field>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <Field label="Billing">
               <Select
@@ -240,9 +376,12 @@ export function Subscriptions() {
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button type="submit" disabled={submitting}>{submitting ? 'Creating…' : 'Create'}</Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? 'Creating…' : isRestaurant ? 'Create restaurant' : 'Create'}
+            </Button>
           </div>
         </form>
+        )}
       </Modal>
     </div>
   );

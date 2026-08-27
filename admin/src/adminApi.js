@@ -47,6 +47,16 @@ export function renewSubscription(id) {
   return authedFetch(`/api/admin/subscriptions/${id}/renew`, { method: 'PATCH' });
 }
 
+// Creates the restaurant owner's real login (a Supabase Auth account in the restaurant repo's
+// own project) plus the restaurant row itself. Idempotent on subscriptionId server-side, so a
+// failed call is simply retried with the same arguments -- see restaurantProvision.js.
+export function provisionRestaurant(subscriptionId, payload) {
+  return authedFetch(`/api/admin/subscriptions/${subscriptionId}/provision-restaurant`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export function suspendSubscription(id) {
   return authedFetch(`/api/admin/subscriptions/${id}/suspend`, { method: 'PATCH' });
 }
