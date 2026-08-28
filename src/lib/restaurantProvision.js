@@ -7,7 +7,7 @@
 //
 // Idempotent on subscriptionId there, so this can simply be called again on failure -- no retry
 // bookkeeping needed here.
-async function provisionRestaurant({ subscriptionId, email, password, fullName, restaurantName, slug }) {
+async function provisionRestaurant({ subscriptionId, email, password, fullName, restaurantName, slug, googlePlaceId }) {
   const base = process.env.RESTAURANT_API_URL;
   const secret = process.env.RESTAURANT_API_SECRET;
   if (!base || !secret) {
@@ -17,7 +17,7 @@ async function provisionRestaurant({ subscriptionId, email, password, fullName, 
   const res = await fetch(`${base}/api/platform/provision`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-provision-secret': secret },
-    body: JSON.stringify({ subscriptionId, email, password, fullName, restaurantName, slug }),
+    body: JSON.stringify({ subscriptionId, email, password, fullName, restaurantName, slug, googlePlaceId }),
     signal: AbortSignal.timeout(8000), // creates an Auth user + two rows; a hung restaurant API must not hang this request forever
   });
 

@@ -28,6 +28,7 @@ const emptyForm = {
   restaurantSlug: '',
   restaurantEmail: '',
   restaurantPassword: '',
+  restaurantGooglePlaceId: '',
 };
 
 export function Subscriptions() {
@@ -147,6 +148,7 @@ export function Subscriptions() {
           fullName: form.newFullName || undefined,
           restaurantName: form.restaurantName.trim(),
           slug: form.restaurantSlug.trim() || undefined,
+          googlePlaceId: form.restaurantGooglePlaceId.trim() || undefined,
         });
       } else {
         toast.success('Subscription created.');
@@ -326,6 +328,13 @@ export function Subscriptions() {
                   placeholder="siphos-grill"
                   value={form.restaurantSlug}
                   onChange={(e) => setForm({ ...form, restaurantSlug: e.target.value })}
+                />
+              </Field>
+              <Field label="Google Place ID" hint="Optional. Without it the thank-you screen shows no Google link. Can also be set later from the restaurant's own console.">
+                <Input
+                  placeholder="ChIJ…"
+                  value={form.restaurantGooglePlaceId}
+                  onChange={(e) => setForm({ ...form, restaurantGooglePlaceId: e.target.value })}
                 />
               </Field>
               <Field

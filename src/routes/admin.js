@@ -120,7 +120,7 @@ router.post('/subscriptions', async (req, res) => {
 // idempotent on subscriptionId, so the console can retry exactly this step on failure without
 // risking a second app_user or a second subscription.
 router.post('/subscriptions/:id/provision-restaurant', async (req, res) => {
-  const { email, password, fullName, restaurantName, slug } = req.body;
+  const { email, password, fullName, restaurantName, slug, googlePlaceId } = req.body;
   if (!email || !password || !restaurantName) {
     return res.status(400).json({ error: 'email, password and restaurantName are required' });
   }
@@ -133,6 +133,7 @@ router.post('/subscriptions/:id/provision-restaurant', async (req, res) => {
       fullName,
       restaurantName,
       slug,
+      googlePlaceId,
     });
     res.status(201).json(restaurant);
   } catch (err) {
